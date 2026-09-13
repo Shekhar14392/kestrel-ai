@@ -1,0 +1,80 @@
+import uuid
+import datetime as dt
+from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, ForeignKey, Float
+from sqlalchemy.orm import relationship
+from database import Base
+
+
+def gen_id():
+    return str(uuid.uuid4())
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(String, primary_key=True, default=gen_id)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    full_name = Column(String, default="")
+    company = Column(String, default="")
+    plan = Column(String, default="trial")  # trial (unpaid) / starter / growth / enterprise
+    plan_expires = Column(DateTime, nullable=True)
+    credits_remaining = Column(Integer, default=50)  # trial credits; see payments.TRIAL_CREDITS
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    workflows = relationship("Workflow", back_populates="owner", cascade="all, delete-orphan")
+    chats = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+
+
+class Workflow(Base):
+    __tablename__ = "workflows"
+    id = Column(String, primary_key=True, default=gen_id)
+    owner_id = Column(String, ForeignKey("users.id"))
+    name = Column(String, default="Untitled Workflow")
+    graph_json = Column(Text, default="{}")  # nodes + edges
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+    updated_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    owner = relationship("User", back_populates="workflows")
+    runs = relationship("WorkflowRun", back_populates="workflow", cascade="all, delete-orphan")
+
+
+class WorkflowRun(Base):
+    __tablename__ = "workflow_runs"
+    id = Column(String, primary_key=True, default=gen_id)
+    workflow_id = Column(String, ForeignKey("workflows.id"))
+    status = Column(String, default="running")  # running / success / failed
+    log_json = Column(Text, default="[]")
+    started_at = Column(DateTime, default=dt.datetime.utcnow)
+    finished_at = Column(DateTime, nullable=True)
+    duration_ms = Column(Integer, default=0)
+
+    workflow = relationship("Workflow", back_populates="runs")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(String, primary_key=True, default=gen_id)
+    user_id = Column(String, ForeignKey("users.id"))
+    agent_key = Column(String, default="general")
+    role = Column(String)  # user / assistant
+    content = Column(Text)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    user = relationship("User", back_populates="chats")
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+    id = Column(String, primary_key=True, default=gen_id)
+    user_id = Column(String, ForeignKey("users.id"))
+    gateway = Column(String)  # razorpay / stripe / paypal
+    gateway_ref = Column(String)
+    plan = Column(String)
+    amount = Column(Float)
+    currency = Column(String, default="INR")
+    status = Column(String, default="created")  # created / paid / failed
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    user = relationship("User", back_populates="payments")

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kestrel AI — The Agent Platform for Running Your Business on Autopilot</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="nav">
+    <a href="/" class="brand"><span class="mark"></span> Kestrel AI</a>
+    <div class="nav-links">
+      <a href="/#platform">Platform</a>
+      <a href="/#agents">Agents</a>
+      <a href="/pricing">Pricing</a>
+      {% if user %}
+        <a href="/dashboard" class="btn btn-primary btn-sm">Go to dashboard</a>
+      {% else %}
+        <a href="/login">Log in</a>
+        <a href="/signup" class="btn btn-primary btn-sm">Start free</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <section class="hero">
+    <div class="wrap">
+      <div class="eyebrow">No-code AI agent platform</div>
+      <h1>Build, deploy, and run AI agents for every part of your business — without a single line of code.</h1>
+      <p class="lead">Kestrel AI combines industry-specific agents, a visual workflow builder, live monitoring, and built-in billing so a team of one can run automation like a team of twenty.</p>
+      <div class="cta-row">
+        <a href="/signup" class="btn btn-brass">Start free — no card needed</a>
+        <a href="/#platform" class="btn btn-ghost" style="border-color:#C9D3D4;color:#F6F4EE;">See how it works</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><b>7</b><span>Industry-tuned agents</span></div>
+        <div class="stat"><b>&lt;10 min</b><span>To your first live workflow</span></div>
+        <div class="stat"><b>3</b><span>Payment gateways built in</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="platform">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Platform</div>
+        <h2>Everything an operations team needs, none of the engineering overhead.</h2>
+        <p>Every piece below is wired together — agents feed workflows, workflows feed your dashboard, and billing runs itself.</p>
+      </div>
+      <div class="grid">
+        <div class="cell"><div class="num">01</div><h3>Visual workflow builder</h3><p>Drag triggers, agents, conditions, and actions onto a canvas and connect them — no code, no YAML.</p></div>
+        <div class="cell"><div class="num">02</div><h3>Industry-specific agents</h3><p>Sales, support, e-commerce, real estate, finance, and clinic front-office agents, tuned out of the box.</p></div>
+        <div class="cell"><div class="num">03</div><h3>Live dashboard</h3><p>Track every workflow run, success rate, and credit balance as it happens.</p></div>
+        <div class="cell"><div class="num">04</div><h3>Data analysis</h3><p>Drop in a CSV or Excel file and get instant column stats and previews — no formulas required.</p></div>
+        <div class="cell"><div class="num">05</div><h3>Flexible plans</h3><p>Start free, scale by credits, or move to enterprise seats — switch anytime.</p></div>
+        <div class="cell"><div class="num">06</div><h3>Built-in billing</h3><p>Razorpay, Stripe, and PayPal are wired in from day one, in INR or USD.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="agents" style="padding-top:0;">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Agent roster</div>
+        <h2>Pick an agent, or run several side by side.</h2>
+      </div>
+    </div>
+    <div class="agent-strip wrap" style="max-width:none; padding:0 24px;">
+      {% for key, a in agents.items() %}
+      <div class="agent-chip">
+        <div class="role">{{ a.role }}</div>
+        <div class="name">{{ a.name }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section id="pricing">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Pricing</div>
+        <h2>Plans that scale with how much automation you run.</h2>
+        <p>Priced in USD. Every plan has a defined monthly credit limit — no plan is unlimited, so usage stays predictable. Razorpay checkout bills the INR equivalent shown at checkout; Stripe and PayPal bill in USD.</p>
+      </div>
+      <div class="pricing-grid">
+        {% for key, p in plans.items() %}
+        <div class="plan-card {% if key == 'growth' %}featured{% endif %}">
+          <h3>{{ p.name }}</h3>
+          <div class="price">${{ p.usd }}<small>/month</small></div>
+          <ul>
+            <li>{{ "{:,}".format(p.credits) }} AI credits / month{% if p.get('custom_above') %} — higher limits available{% endif %}</li>
+            {% if key == 'starter' %}
+            <li>Up to 3 active workflows</li>
+            <li>All agents, standard usage</li>
+            <li>Email support</li>
+            {% elif key == 'growth' %}
+            <li>Unlimited workflows</li>
+            <li>All agents, full usage</li>
+            <li>CSV/Excel data analysis</li>
+            <li>Priority support</li>
+            {% else %}
+            <li>Everything in Growth</li>
+            <li>Custom credit limits above 25,000/month</li>
+            <li>Dedicated onboarding & custom agent tuning</li>
+            <li>SLA + priority support</li>
+            {% endif %}
+          </ul>
+          {% if user %}
+            {% if user.plan == key %}
+              <a href="/dashboard" class="btn btn-ghost btn-block">Current plan</a>
+            {% else %}
+              <button class="btn btn-primary btn-block" onclick="openCheckout('{{ key }}')">Choose {{ p.name }}</button>
+            {% endif %}
+          {% else %}
+            <a href="/signup" class="btn btn-primary btn-block">Get started</a>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <p class="muted" style="margin-top:20px; font-size:0.85rem;">New accounts start with a 50-credit trial to explore agents and workflows before choosing a plan. Need more than 25,000 Enterprise credits, invoicing, or seats — <a href="mailto:hello@kestrel.ai" style="text-decoration:underline;">contact us</a> for custom limits.</p>
+    </div>
+  </section>
+
+  {% if user %}
+  <div id="checkout-modal" style="display:none; position:fixed; inset:0; background:rgba(11,32,39,0.6); z-index:50; align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:32px; max-width:380px; width:90%;">
+      <h3 style="margin-bottom:16px;">Choose a payment method</h3>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <button class="btn btn-ghost" onclick="payWith('razorpay')">Pay with Razorpay (UPI / Cards / Netbanking)</button>
+        <button class="btn btn-ghost" onclick="payWith('stripe')">Pay with Stripe (Card, USD)</button>
+        <button class="btn btn-ghost" onclick="payWith('paypal')">Pay with PayPal (USD)</button>
+        <button class="btn" style="margin-top:8px;" onclick="closeCheckout()">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    let selectedPlan = null;
+    function openCheckout(plan) { selectedPlan = plan; document.getElementById('checkout-modal').style.display = 'flex'; }
+    function closeCheckout() { document.getElementById('checkout-modal').style.display = 'none'; }
+
+    async function payWith(gateway) {
+      if (gateway === 'razorpay') {
+        const res = await fetch('/api/payments/razorpay/create-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({plan: selectedPlan}) });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'Razorpay is not configured yet.'); return; }
+        const rzp = new Razorpay({
+          key: data.key_id, amount: data.order.amount, currency: 'INR', name: 'Kestrel AI',
+          description: selectedPlan + ' plan', order_id: data.order.id,
+          handler: async function(response) {
+            const v = await fetch('/api/payments/razorpay/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(response) });
+            if (v.ok) window.location.href = '/dashboard?payment=success';
+          },
+          theme: { color: '#0B2027' }
+        });
+        rzp.open();
+      } else if (gateway === 'stripe') {
+        const res = await fetch('/api/payments/stripe/create-session', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({plan: selectedPlan}) });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'Stripe is not configured yet.'); return; }
+        window.location.href = data.url;
+      } else if (gateway === 'paypal') {
+        const res = await fetch('/api/payments/paypal/create-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({plan: selectedPlan}) });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'PayPal is not configured yet.'); return; }
+        const approveLink = (data.links || []).find(l => l.rel === 'approve');
+        if (approveLink) window.location.href = approveLink.href;
+      }
+    }
+  </script>
+  {% endif %}
+
+  <footer>
+    <div class="wrap">Kestrel AI — built for teams of one running businesses that don't sleep.</div>
+  </footer>
+
+  {% if scroll_to_pricing %}
+  <script>window.addEventListener('DOMContentLoaded', () => document.getElementById('pricing').scrollIntoView());</script>
+  {% endif %}
+</body>
+</html>

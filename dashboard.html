@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Kestrel AI</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  {% include "_sidebar.html" %}
+  <div class="main-area">
+    <div class="topbar">
+      <h1>Overview</h1>
+      <span class="muted">Welcome back{% if user.full_name %}, {{ user.full_name.split(' ')[0] }}{% endif %}</span>
+    </div>
+
+    <div class="kpi-row" id="kpi-row">
+      <div class="kpi"><div class="label">Workflow runs</div><div class="value" id="kpi-runs">—</div></div>
+      <div class="kpi"><div class="label">Success rate</div><div class="value" id="kpi-success">—</div></div>
+      <div class="kpi"><div class="label">Chat messages</div><div class="value" id="kpi-chats">—</div></div>
+      <div class="kpi"><div class="label">Credits remaining</div><div class="value" id="kpi-credits">—</div></div>
+    </div>
+
+    <div class="panel">
+      <h3>Run activity (last 50 runs)</h3>
+      <canvas id="runsChart" height="90"></canvas>
+    </div>
+
+    <div class="panel">
+      <h3>Recent runs</h3>
+      <table>
+        <thead><tr><th>Run</th><th>Status</th><th>Duration</th><th>Started</th></tr></thead>
+        <tbody id="runs-table"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Your workflows <a href="/workflows" class="btn btn-brass btn-sm" style="float:right;">+ New workflow</a></h3>
+      {% if workflows %}
+      <table>
+        <thead><tr><th>Name</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+        <tbody>
+          {% for w in workflows %}
+          <tr>
+            <td>{{ w.name }}</td>
+            <td><span class="status-pill {{ 'status-success' if w.is_active else 'status-running' }}">{{ 'Active' if w.is_active else 'Draft' }}</span></td>
+            <td class="muted">{{ w.updated_at.strftime('%d %b, %H:%M') }}</td>
+            <td><a href="/workflows/{{ w.id }}" class="btn btn-ghost btn-sm">Open</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No workflows yet. <a href="/workflows">Build your first one →</a></p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+let chart;
+async function loadMetrics() {
+  const res = await fetch('/api/metrics');
+  const m = await res.json();
+  document.getElementById('kpi-runs').textContent = m.total_runs;
+  const rate = m.total_runs ? Math.round((m.success / m.total_runs) * 100) : 0;
+  document.getElementById('kpi-success').textContent = rate + '%';
+  document.getElementById('kpi-chats').textContent = m.chat_messages;
+  document.getElementById('kpi-credits').textContent = m.credits_remaining;
+
+  const tbody = document.getElementById('runs-table');
+  tbody.innerHTML = m.recent_runs.length ? '' : '<tr><td colspan="4" class="muted">No runs yet.</td></tr>';
+  m.recent_runs.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.id.slice(0,8)}</td><td><span class="status-pill status-${r.status}">${r.status}</span></td><td>${r.duration_ms} ms</td><td class="muted">${new Date(r.started_at).toLocaleString()}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  const labels = m.timeline.map(t => t.day);
+  const successData = m.timeline.map(t => t.success);
+  const failedData = m.timeline.map(t => t.failed);
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('runsChart'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Success', data: successData, backgroundColor: '#4E8B6C' },
+      { label: 'Failed', data: failedData, backgroundColor: '#B5533C' },
+    ]},
+    options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+  });
+}
+loadMetrics();
+setInterval(loadMetrics, 8000);
+</script>
+</body>
+</html>

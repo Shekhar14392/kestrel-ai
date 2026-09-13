@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Analysis — Kestrel AI</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  {% include "_sidebar.html" %}
+  <div class="main-area">
+    <div class="topbar"><h1>Data Analysis</h1></div>
+    <div class="panel">
+      <h3>Upload a CSV or Excel file</h3>
+      <input type="file" id="file-input" accept=".csv,.xls,.xlsx">
+      <button class="btn btn-primary btn-sm" style="margin-left:10px;" onclick="analyze()">Analyze</button>
+      <p class="muted" id="status" style="margin-top:12px;"></p>
+    </div>
+    <div class="panel" id="results-panel" style="display:none;">
+      <h3>Summary</h3>
+      <div class="kpi-row" id="summary-kpis"></div>
+      <h3>Column stats</h3>
+      <table id="stats-table"><thead><tr><th>Column</th><th>Mean</th><th>Min</th><th>Max</th></tr></thead><tbody></tbody></table>
+      <h3 style="margin-top:24px;">Preview (first 10 rows)</h3>
+      <div style="overflow-x:auto;"><table id="preview-table"></table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function analyze() {
+  const fileInput = document.getElementById('file-input');
+  if (!fileInput.files.length) { document.getElementById('status').textContent = 'Choose a file first.'; return; }
+  document.getElementById('status').textContent = 'Analyzing…';
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  const res = await fetch('/api/data-analysis', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!res.ok) { document.getElementById('status').textContent = data.detail || 'Something went wrong.'; return; }
+  document.getElementById('status').textContent = '';
+  document.getElementById('results-panel').style.display = 'block';
+
+  document.getElementById('summary-kpis').innerHTML = `
+    <div class="kpi"><div class="label">Rows</div><div class="value">${data.rows}</div></div>
+    <div class="kpi"><div class="label">Columns</div><div class="value">${data.columns.length}</div></div>
+    <div class="kpi"><div class="label">Numeric columns</div><div class="value">${data.numeric_columns.length}</div></div>
+  `;
+
+  const statsBody = document.querySelector('#stats-table tbody');
+  statsBody.innerHTML = data.numeric_columns.map(c => {
+    const s = data.stats[c];
+    return `<tr><td>${c}</td><td>${s.mean ?? '—'}</td><td>${s.min ?? '—'}</td><td>${s.max ?? '—'}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="muted">No numeric columns found.</td></tr>';
+
+  const previewTable = document.getElementById('preview-table');
+  const headRow = '<tr>' + data.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
+  const bodyRows = data.preview.map(row => '<tr>' + data.columns.map(c => `<td>${row[c] ?? ''}</td>`).join('') + '</tr>').join('');
+  previewTable.innerHTML = '<thead>' + headRow + '</thead><tbody>' + bodyRows + '</tbody>';
+}
+</script>
+</body>
+</html>
