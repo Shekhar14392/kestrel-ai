@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow Builder — Kestrel AI</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  {% include "_sidebar.html" %}
+  <div class="main-area" style="padding:0; display:flex; flex-direction:column;">
+    <div class="topbar" style="padding:20px 24px 0;">
+      <div>
+        <input id="wf-name" value="{{ workflow.name if workflow else 'Untitled Workflow' }}" style="font-family:'Fraunces',serif; font-size:1.4rem; border:none; background:transparent; color:var(--ink);">
+        <div class="muted" style="font-size:0.82rem;">
+          {% if workflows %}
+            {% for w in workflows %}<a href="/workflows/{{ w.id }}" style="margin-right:14px; text-decoration:none;">{{ w.name }}{% if workflow and workflow.id == w.id %} •{% endif %}</a>{% endfor %}
+          {% endif %}
+        </div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-ghost btn-sm" onclick="saveWorkflow()">Save</button>
+        <button class="btn btn-brass btn-sm" onclick="runWorkflow()">▶ Run workflow</button>
+      </div>
+    </div>
+
+    <div class="wf-layout">
+      <div class="wf-sidebar">
+        <h4>Add nodes</h4>
+        <button class="wf-node-btn" onclick="addNode('trigger')">⚡ Trigger</button>
+        <button class="wf-node-btn" onclick="addNode('agent')">🤖 AI Agent</button>
+        <button class="wf-node-btn" onclick="addNode('condition')">◇ Condition</button>
+        <button class="wf-node-btn" onclick="addNode('webhook')">🔗 Webhook / Action</button>
+        <button class="wf-node-btn" onclick="addNode('delay')">⏱ Delay</button>
+        <h4>Run log</h4>
+        <div id="run-log" style="font-size:0.8rem; color:var(--slate-soft);">Run the workflow to see live step-by-step output here.</div>
+      </div>
+      <div class="wf-canvas-wrap" id="canvas-wrap">
+        <div class="wf-toolbar"><span class="muted" style="font-size:0.8rem; background:#fff; padding:4px 8px; border:1px solid var(--paper-dim);">Click a node's right dot, then a target node's left dot, to connect.</span></div>
+        <svg id="wf-edges" style="position:absolute; top:0; left:0; width:2000px; height:1400px; pointer-events:none;"></svg>
+        <div id="wf-canvas"></div>
+      </div>
+      <div class="wf-inspector" id="wf-inspector">
+        <h3>Node settings</h3>
+        <p class="muted" id="inspector-empty">Select a node to edit its settings.</p>
+        <div id="inspector-body" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const AGENTS = {{ agents|tojson }};
+const initialGraph = {{ (workflow.graph_json if workflow else '{"nodes":[],"edges":[]}')|safe }};
+const workflowId = {{ ('"' + workflow.id + '"')|safe if workflow else 'null' }};
+
+let graph = (initialGraph && initialGraph.nodes) ? initialGraph : { nodes: [], edges: [] };
+let selectedNodeId = null;
+let connectingFrom = null; // {nodeId, branch}
+let nodeCounter = graph.nodes.length;
+
+const canvas = document.getElementById('wf-canvas');
+const svg = document.getElementById('wf-edges');
+
+function nodeDefaults(type) {
+  if (type === 'trigger') return { label: 'Manual Trigger', config: {} };
+  if (type === 'agent') return { label: 'AI Agent', config: { agent: 'general', prompt: 'Respond helpfully.' } };
+  if (type === 'condition') return { label: 'Condition', config: { variable: '', operator: 'contains', value: '' } };
+  if (type === 'webhook') return { label: 'Webhook', config: { url: '' } };
+  if (type === 'delay') return { label: 'Delay', config: { seconds: 5 } };
+  return { label: type, config: {} };
+}
+
+function addNode(type) {
+  nodeCounter++;
+  const id = 'n' + nodeCounter + '_' + Date.now();
+  const defaults = nodeDefaults(type);
+  const node = { id, type, label: defaults.label, config: defaults.config, x: 60 + (nodeCounter % 5) * 40, y: 40 + (nodeCounter % 6) * 90 };
+  graph.nodes.push(node);
+  renderAll();
+  selectNode(id);
+}
+
+function renderAll() {
+  canvas.innerHTML = '';
+  graph.nodes.forEach(renderNode);
+  renderEdges();
+}
+
+function renderNode(node) {
+  const div = document.createElement('div');
+  div.className = 'wf-node' + (node.type === 'trigger' ? ' trigger' : '');
+  div.style.left = node.x + 'px';
+  div.style.top = node.y + 'px';
+  div.dataset.id = node.id;
+  div.innerHTML = `
+    <div class="wf-node-type">${node.type.toUpperCase()}</div>
+    <div class="wf-node-label">${node.label}</div>
+    ${node.type !== 'trigger' ? '<div class="port in" data-port="in"></div>' : ''}
+    ${node.type === 'condition'
+      ? '<div class="port branch-true" data-port="out" data-branch="true" title="If true"></div><div class="port branch-false" data-port="out" data-branch="false" title="If false"></div>'
+      : '<div class="port out" data-port="out"></div>'}
+  `;
+  div.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('port')) return;
+    startDrag(e, node);
+  });
+  div.addEventListener('click', (e) => {
+    if (e.target.classList.contains('port')) {
+      handlePortClick(node, e.target);
+    } else {
+      selectNode(node.id);
+    }
+  });
+  canvas.appendChild(div);
+}
+
+function startDrag(e, node) {
+  e.preventDefault();
+  const startX = e.clientX, startY = e.clientY;
+  const origX = node.x, origY = node.y;
+  function onMove(ev) {
+    node.x = origX + (ev.clientX - startX);
+    node.y = origY + (ev.clientY - startY);
+    renderAll();
+  }
+  function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function handlePortClick(node, portEl) {
+  const portType = portEl.dataset.port;
+  const branch = portEl.dataset.branch || null;
+  if (portType === 'out') {
+    connectingFrom = { nodeId: node.id, branch };
+  } else if (portType === 'in' && connectingFrom) {
+    if (connectingFrom.nodeId !== node.id) {
+      graph.edges = graph.edges.filter(e => !(e.from === connectingFrom.nodeId && e.branch === connectingFrom.branch));
+      graph.edges.push({ from: connectingFrom.nodeId, to: node.id, branch: connectingFrom.branch });
+      renderAll();
+    }
+    connectingFrom = null;
+  }
+}
+
+function renderEdges() {
+  svg.innerHTML = '';
+  graph.edges.forEach(edge => {
+    const fromNode = graph.nodes.find(n => n.id === edge.from);
+    const toNode = graph.nodes.find(n => n.id === edge.to);
+    if (!fromNode || !toNode) return;
+    const x1 = fromNode.x + 190, y1 = fromNode.y + 30;
+    const x2 = toNode.x, y2 = toNode.y + 30;
+    const midX = (x1 + x2) / 2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`);
+    path.setAttribute('stroke', edge.branch === 'false' ? '#B5533C' : (edge.branch === 'true' ? '#4E8B6C' : '#0B2027'));
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('fill', 'none');
+    svg.appendChild(path);
+  });
+}
+
+function selectNode(id) {
+  selectedNodeId = id;
+  const node = graph.nodes.find(n => n.id === id);
+  document.getElementById('inspector-empty').style.display = 'none';
+  const body = document.getElementById('inspector-body');
+  body.style.display = 'block';
+
+  let fields = `<div class="form-field"><label>Label</label><input id="f-label" value="${node.label}"></div>`;
+  if (node.type === 'agent') {
+    const options = Object.keys(AGENTS).map(k => `<option value="${k}" ${node.config.agent === k ? 'selected' : ''}>${AGENTS[k].name} — ${AGENTS[k].role}</option>`).join('');
+    fields += `<div class="form-field"><label>Agent</label><select id="f-agent">${options}</select></div>
+               <div class="form-field"><label>Prompt (use {node_id_output} to reference earlier steps)</label><textarea id="f-prompt">${node.config.prompt || ''}</textarea></div>`;
+  } else if (node.type === 'condition') {
+    fields += `<div class="form-field"><label>Variable (e.g. n1_output)</label><input id="f-variable" value="${node.config.variable || ''}"></div>
+               <div class="form-field"><label>Operator</label><select id="f-operator">
+                 <option value="contains" ${node.config.operator==='contains'?'selected':''}>Contains</option>
+                 <option value="equals" ${node.config.operator==='equals'?'selected':''}>Equals</option>
+                 <option value="truthy" ${node.config.operator==='truthy'?'selected':''}>Is not empty</option>
+               </select></div>
+               <div class="form-field"><label>Value to compare</label><input id="f-value" value="${node.config.value || ''}"></div>`;
+  } else if (node.type === 'webhook') {
+    fields += `<div class="form-field"><label>Webhook URL</label><input id="f-url" value="${node.config.url || ''}" placeholder="https://..."></div>`;
+  } else if (node.type === 'delay') {
+    fields += `<div class="form-field"><label>Seconds</label><input id="f-seconds" type="number" value="${node.config.seconds || 5}"></div>`;
+  }
+  fields += `<button class="btn btn-primary btn-sm btn-block" onclick="applyNodeConfig()">Apply</button>
+             <button class="btn btn-danger btn-sm btn-block" style="margin-top:8px;" onclick="deleteNode()">Delete node</button>`;
+  body.innerHTML = fields;
+}
+
+function applyNodeConfig() {
+  const node = graph.nodes.find(n => n.id === selectedNodeId);
+  node.label = document.getElementById('f-label').value;
+  if (node.type === 'agent') {
+    node.config.agent = document.getElementById('f-agent').value;
+    node.config.prompt = document.getElementById('f-prompt').value;
+  } else if (node.type === 'condition') {
+    node.config.variable = document.getElementById('f-variable').value;
+    node.config.operator = document.getElementById('f-operator').value;
+    node.config.value = document.getElementById('f-value').value;
+  } else if (node.type === 'webhook') {
+    node.config.url = document.getElementById('f-url').value;
+  } else if (node.type === 'delay') {
+    node.config.seconds = parseInt(document.getElementById('f-seconds').value || '5', 10);
+  }
+  renderAll();
+}
+
+function deleteNode() {
+  graph.nodes = graph.nodes.filter(n => n.id !== selectedNodeId);
+  graph.edges = graph.edges.filter(e => e.from !== selectedNodeId && e.to !== selectedNodeId);
+  selectedNodeId = null;
+  document.getElementById('inspector-body').style.display = 'none';
+  document.getElementById('inspector-empty').style.display = 'block';
+  renderAll();
+}
+
+async function saveWorkflow() {
+  const name = document.getElementById('wf-name').value;
+  const payload = { name, graph, is_active: true };
+  if (workflowId) {
+    await fetch('/api/workflows/' + workflowId, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    alert('Workflow saved.');
+  } else {
+    const res = await fetch('/api/workflows', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const data = await res.json();
+    window.location.href = '/workflows/' + data.id;
+  }
+}
+
+async function runWorkflow() {
+  if (!workflowId) { await saveWorkflow(); return; }
+  document.getElementById('run-log').innerHTML = 'Running…';
+  const res = await fetch('/api/workflows/' + workflowId + '/run', { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) { document.getElementById('run-log').textContent = 'Error: ' + (data.detail || 'run failed'); return; }
+  document.getElementById('run-log').innerHTML = data.log.map(s =>
+    `<div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--paper-dim);"><strong>${s.type || s.step}</strong><br>${(s.result || s.error || '').toString().slice(0,200)}</div>`
+  ).join('');
+}
+
+renderAll();
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 import pandas as pd
 
 from database import Base, engine, get_db
@@ -55,7 +56,11 @@ def signup(payload: dict, response: Response, db: Session = Depends(get_db)):
         raise HTTPException(400, "An account with this email already exists.")
     user = User(email=email, hashed_password=hash_password(password), full_name=full_name, company=company)
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "An account with this email already exists.")
     db.refresh(user)
     token = create_token(user.id)
     response = JSONResponse({"ok": True, "redirect": "/dashboard"})

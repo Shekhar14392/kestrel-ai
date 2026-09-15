@@ -1,0 +1,24 @@
+<div class="sidebar">
+  <div class="brand"><span class="mark"></span> Kestrel AI</div>
+  <nav>
+    <a href="/dashboard" class="{{ 'active' if request.url.path == '/dashboard' else '' }}">Overview</a>
+    <a href="/chat" class="{{ 'active' if request.url.path == '/chat' else '' }}">Agent Chat</a>
+    <a href="/workflows" class="{{ 'active' if '/workflows' in request.url.path else '' }}">Workflows</a>
+    <a href="/data-analysis" class="{{ 'active' if request.url.path == '/data-analysis' else '' }}">Data Analysis</a>
+    <a href="/pricing">Billing & Plans</a>
+  </nav>
+  <div class="plan-badge">
+    Plan: <strong>{{ user.plan|capitalize }}</strong><br>
+    Credits: {{ user.credits_remaining }}
+  </div>
+  <div style="padding: 20px 24px 0;">
+    <button onclick="logout()" class="btn btn-ghost btn-sm btn-block" style="border-color:#4C6068;color:#C9D3D4;">Log out</button>
+  </div>
+</div>
+<script>
+async function logout() {
+  const res = await fetch('/api/logout', { method: 'POST' });
+  const data = await res.json();
+  window.location.href = data.redirect;
+}
+</script>

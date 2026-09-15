@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Chat — Kestrel AI</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  {% include "_sidebar.html" %}
+  <div class="main-area" style="padding:0; display:flex;">
+    <div class="chat-layout" style="flex:1;">
+      <div class="agent-list">
+        {% for key, a in agents.items() %}
+        <div class="agent-item {{ 'active' if loop.first }}" data-agent="{{ key }}" onclick="selectAgent('{{ key }}', this)">
+          <div class="name">{{ a.name }}</div>
+          <div class="role">{{ a.role }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="chat-main">
+        <div style="padding:20px 40px 0;"><h1 style="font-size:1.3rem;" id="active-agent-name">{{ (agents.values()|list)[0].name }}</h1><span class="muted" id="active-agent-role">{{ (agents.values()|list)[0].role }}</span></div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" placeholder="Type a message…" onkeydown="if(event.key==='Enter') sendMessage()">
+          <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const agents = {{ agents|tojson }};
+let currentAgent = Object.keys(agents)[0];
+const histories = {};
+
+function selectAgent(key, el) {
+  currentAgent = key;
+  document.querySelectorAll('.agent-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('active-agent-name').textContent = agents[key].name;
+  document.getElementById('active-agent-role').textContent = agents[key].role;
+  renderHistory();
+}
+
+function renderHistory() {
+  const box = document.getElementById('chat-messages');
+  box.innerHTML = '';
+  (histories[currentAgent] || []).forEach(m => addBubble(m.role, m.content, false));
+}
+
+function addBubble(role, content, scroll = true) {
+  const box = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = content;
+  box.appendChild(div);
+  if (scroll) box.scrollTop = box.scrollHeight;
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  histories[currentAgent] = histories[currentAgent] || [];
+  histories[currentAgent].push({ role: 'user', content: text });
+  addBubble('user', text);
+  addBubble('assistant', 'Thinking…');
+  try {
+    const res = await fetch('/api/chat/' + currentAgent, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ message: text }) });
+    const data = await res.json();
+    document.getElementById('chat-messages').lastChild.remove();
+    if (!res.ok) { addBubble('assistant', 'Error: ' + (data.detail || 'something went wrong.')); return; }
+    histories[currentAgent].push({ role: 'assistant', content: data.reply });
+    addBubble('assistant', data.reply);
+  } catch (e) {
+    document.getElementById('chat-messages').lastChild.remove();
+    addBubble('assistant', 'Network error — please try again.');
+  }
+}
+</script>
+</body>
+</html>
