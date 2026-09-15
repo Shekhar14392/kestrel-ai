@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ 'Log in' if mode == 'login' else 'Create your account' }} — Kestrel AI</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="nav">
+    <a href="/" class="brand"><span class="mark"></span> Kestrel AI</a>
+    <div class="nav-links">
+      {% if mode == 'login' %}
+        <span class="muted">New here?</span> <a href="/signup" class="btn btn-ghost btn-sm">Create account</a>
+      {% else %}
+        <span class="muted">Already have an account?</span> <a href="/login" class="btn btn-ghost btn-sm">Log in</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="auth-card">
+    {% if mode == 'login' %}
+      <h2>Welcome back</h2>
+      <p class="sub">Log in to your Kestrel AI workspace.</p>
+      <form id="auth-form">
+        <div class="form-field"><label>Email</label><input type="email" name="email" required></div>
+        <div class="form-field"><label>Password</label><input type="password" name="password" required></div>
+        <button type="submit" class="btn btn-primary btn-block">Log in</button>
+        <div class="error-msg" id="error-msg"></div>
+      </form>
+    {% else %}
+      <h2>Create your workspace</h2>
+      <p class="sub">Starter plan is free — no card required.</p>
+      <form id="auth-form">
+        <div class="form-field"><label>Full name</label><input type="text" name="full_name"></div>
+        <div class="form-field"><label>Company</label><input type="text" name="company"></div>
+        <div class="form-field"><label>Email</label><input type="email" name="email" required></div>
+        <div class="form-field"><label>Password</label><input type="password" name="password" required minlength="6"></div>
+        <button type="submit" class="btn btn-primary btn-block">Create account</button>
+        <div class="error-msg" id="error-msg"></div>
+      </form>
+    {% endif %}
+  </div>
+
+<script>
+const mode = "{{ mode }}";
+document.getElementById('auth-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const payload = Object.fromEntries(fd.entries());
+  const endpoint = mode === 'login' ? '/api/login' : '/api/signup';
+  const errEl = document.getElementById('error-msg');
+  errEl.style.display = 'none';
+  try {
+    const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.detail || 'Something went wrong.'; errEl.style.display = 'block'; return; }
+    window.location.href = data.redirect;
+  } catch (err) {
+    errEl.textContent = 'Network error — please try again.';
+    errEl.style.display = 'block';
+  }
+});
+</script>
+</body>
+</html>
