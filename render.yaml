@@ -6,15 +6,9 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
-      -services:
-  - type: web
-    name: your-service-name
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: your-start-command
-    envVars:
       - key: PYTHON_VERSION
-        value: 3.12.7key: JWT_SECRET
+        value: 3.13.0
+      - key: JWT_SECRET
         generateValue: true
       - key: DATABASE_URL
         sync: false
