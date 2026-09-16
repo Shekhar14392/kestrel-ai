@@ -32,7 +32,7 @@
         <a href="/#platform" class="btn btn-ghost" style="border-color:#C9D3D4;color:#F6F4EE;">See how it works</a>
       </div>
       <div class="hero-stats">
-        <div class="stat"><b>2</b><span>Dedicated AI assistants</span></div>
+        <div class="stat"><b>16</b><span>AI assistants</span></div>
         <div class="stat"><b>&lt;10 min</b><span>To your first live workflow</span></div>
         <div class="stat"><b>3</b><span>Payment gateways built in</span></div>
       </div>
@@ -48,11 +48,11 @@
       </div>
       <div class="grid">
         <div class="cell"><div class="num">01</div><h3>Visual workflow builder</h3><p>Drag triggers, agents, conditions, and actions onto a canvas and connect them — no code, no YAML.</p></div>
-        <div class="cell"><div class="num">02</div><h3>Tara & Ved, your AI team</h3><p>Tara handles customers — sales, support, bookings. Ved handles operations — finance, HR, logistics, and business strategy.</p></div>
+        <div class="cell"><div class="num">02</div><h3>16 industry-tuned agents</h3><p>Sales, support, e-commerce, real estate, finance, legal, HR, and more — led by Tara and Ved for customer and operations work.</p></div>
         <div class="cell"><div class="num">03</div><h3>Live dashboard</h3><p>Track every workflow run, success rate, and credit balance as it happens.</p></div>
         <div class="cell"><div class="num">04</div><h3>Data analysis</h3><p>Drop in a CSV or Excel file and get instant column stats and previews — no formulas required.</p></div>
         <div class="cell"><div class="num">05</div><h3>Flexible plans</h3><p>Start free, scale by credits, or move to enterprise seats — switch anytime.</p></div>
-        <div class="cell"><div class="num">06</div><h3>Built-in billing</h3><p>Razorpay, Stripe, and PayPal are wired in from day one, in INR or USD.</p></div>
+        <div class="cell"><div class="num">06</div><h3>Built-in billing</h3><p>Razorpay checkout is wired in from day one, billed in INR.</p></div>
       </div>
     </div>
   </section>
@@ -60,15 +60,18 @@
   <section id="agents" style="padding-top:0;">
     <div class="wrap">
       <div class="section-head">
-        <div class="kicker">Meet your AI team</div>
-        <h2>Tara and Ved, ready to work from day one.</h2>
+        <div class="kicker">Agent roster</div>
+        <h2>16 assistants, led by Tara and Ved.</h2>
+        <p>Pick one, or run several side by side — Tara and Ved coordinate the rest.</p>
       </div>
     </div>
-    <div class="agent-strip wrap" style="max-width:none; padding:0 24px; justify-content:center; gap:48px;">
+    <div class="agent-strip wrap" style="max-width:none; padding:0 24px; flex-wrap:wrap; justify-content:center; gap:20px;">
       {% for key, a in agents.items() %}
-      <div class="agent-chip" style="display:flex; flex-direction:column; align-items:center; text-align:center; padding:28px 32px; min-width:220px;">
-        <div class="agent-avatar" style="width:120px; height:120px; margin-bottom:14px;">{{ a.avatar_svg|safe }}</div>
-        <div class="name" style="font-size:1.2rem;">{{ a.name }}</div>
+      <div class="agent-chip" style="display:flex; flex-direction:column; align-items:center; text-align:center; padding:{{ '24px 28px' if a.avatar_svg else '16px 20px' }}; min-width:{{ '200px' if a.avatar_svg else '150px' }};">
+        {% if a.avatar_svg %}
+        <div class="agent-avatar" style="width:88px; height:88px; margin-bottom:10px;">{{ a.avatar_svg|safe }}</div>
+        {% endif %}
+        <div class="name" style="{{ 'font-size:1.1rem;' if a.avatar_svg else '' }}">{{ a.name }}</div>
         <div class="role">{{ a.role }}</div>
       </div>
       {% endfor %}
@@ -88,7 +91,7 @@
       <div class="section-head">
         <div class="kicker">Pricing</div>
         <h2>Plans that scale with how much automation you run.</h2>
-        <p>Priced in USD. Every plan has a defined monthly credit limit — no plan is unlimited, so usage stays predictable. Razorpay checkout bills the INR equivalent shown at checkout; Stripe and PayPal bill in USD.</p>
+        <p>Priced in USD, shown for reference. Every plan has a defined monthly credit limit — no plan is unlimited, so usage stays predictable. All checkout runs through Razorpay, billed at the INR equivalent shown at checkout.</p>
       </div>
       <div class="pricing-grid">
         {% for key, p in plans.items() %}
@@ -130,53 +133,26 @@
   </section>
 
   {% if user %}
-  <div id="checkout-modal" style="display:none; position:fixed; inset:0; background:rgba(11,32,39,0.6); z-index:50; align-items:center; justify-content:center;">
-    <div style="background:#fff; padding:32px; max-width:380px; width:90%;">
-      <h3 style="margin-bottom:16px;">Choose a payment method</h3>
-      <div style="display:flex; flex-direction:column; gap:10px;">
-        <button class="btn btn-ghost" onclick="payWith('razorpay')">Pay with Razorpay (UPI / Cards / Netbanking)</button>
-        <button class="btn btn-ghost" onclick="payWith('stripe')">Pay with Stripe (Card, USD)</button>
-        <button class="btn btn-ghost" onclick="payWith('paypal')">Pay with PayPal (USD)</button>
-        <button class="btn" style="margin-top:8px;" onclick="closeCheckout()">Cancel</button>
-      </div>
-    </div>
-  </div>
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script>
-    let selectedPlan = null;
-    function openCheckout(plan) { selectedPlan = plan; document.getElementById('checkout-modal').style.display = 'flex'; }
-    function closeCheckout() { document.getElementById('checkout-modal').style.display = 'none'; }
-
-    async function payWith(gateway) {
-      if (gateway === 'razorpay') {
-        const res = await fetch('/api/payments/razorpay/create-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({plan: selectedPlan}) });
-        const data = await res.json();
-        if (!res.ok) { alert(data.detail || 'Razorpay is not configured yet.'); return; }
-        const rzp = new Razorpay({
-          key: data.key_id, amount: data.order.amount, currency: 'INR', name: 'Kestrel AI',
-          description: selectedPlan + ' plan', order_id: data.order.id,
-          handler: async function(response) {
-            const v = await fetch('/api/payments/razorpay/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(response) });
-            if (v.ok) window.location.href = '/thank-you?plan=' + encodeURIComponent(selectedPlan) + '&gateway=razorpay';
-          },
-          theme: { color: '#0B2027' }
-        });
-        rzp.open();
-      } else if (gateway === 'stripe') {
-        const res = await fetch('/api/payments/stripe/create-session', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({plan: selectedPlan}) });
-        const data = await res.json();
-        if (!res.ok) { alert(data.detail || 'Stripe is not configured yet.'); return; }
-        window.location.href = data.url;
-      } else if (gateway === 'paypal') {
-        const res = await fetch('/api/payments/paypal/create-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({plan: selectedPlan}) });
-        const data = await res.json();
-        if (!res.ok) { alert(data.detail || 'PayPal is not configured yet.'); return; }
-        const approveLink = (data.links || []).find(l => l.rel === 'approve');
-        if (approveLink) window.location.href = approveLink.href;
-      }
+    async function openCheckout(plan) {
+      const res = await fetch('/api/payments/razorpay/create-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({plan}) });
+      const data = await res.json();
+      if (!res.ok) { alert(data.detail || 'Razorpay is not configured yet.'); return; }
+      const rzp = new Razorpay({
+        key: data.key_id, amount: data.order.amount, currency: 'INR', name: 'Kestrel AI',
+        description: plan + ' plan', order_id: data.order.id,
+        handler: async function(response) {
+          const v = await fetch('/api/payments/razorpay/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(response) });
+          if (v.ok) window.location.href = '/thank-you?plan=' + encodeURIComponent(plan) + '&gateway=razorpay';
+        },
+        theme: { color: '#0B2027' }
+      });
+      rzp.open();
     }
   </script>
   {% endif %}
+
 
   <footer>
     <div class="wrap">Kestrel AI — built for teams of one running businesses that don't sleep.</div>

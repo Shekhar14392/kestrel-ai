@@ -69,7 +69,7 @@ class Payment(Base):
     __tablename__ = "payments"
     id = Column(String, primary_key=True, default=gen_id)
     user_id = Column(String, ForeignKey("users.id"))
-    gateway = Column(String)  # razorpay / stripe / paypal
+    gateway = Column(String)  # razorpay
     gateway_ref = Column(String)
     plan = Column(String)
     amount = Column(Float)

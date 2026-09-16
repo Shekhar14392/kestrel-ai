@@ -104,20 +104,6 @@ def thank_you(request: Request, user: User = Depends(get_current_user)):
     )
 
 
-@app.get("/paypal/return")
-async def paypal_return(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    order_id = request.query_params.get("token")
-    if not order_id:
-        return RedirectResponse("/pricing?payment=cancelled")
-    result = await pay.paypal_capture_order(order_id)
-    p = db.query(Payment).filter(Payment.gateway_ref == order_id).first()
-    plan_key = p.plan if p else None
-    if p and result.get("status") == "COMPLETED":
-        p.status = "paid"
-        user.plan = p.plan
-        user.credits_remaining = pay.PLANS[p.plan]["credits"]
-        db.commit()
-    return RedirectResponse(f"/thank-you?plan={plan_key}&gateway=paypal")
 
 
 # ---------------------------------------------------------------- Dashboard
@@ -331,52 +317,6 @@ def razorpay_verify(payload: dict, user: User = Depends(get_current_user), db: S
         user.credits_remaining = pay.PLANS[p.plan]["credits"]
         db.commit()
     return {"ok": True}
-
-
-@app.post("/api/payments/stripe/create-session")
-def stripe_session(payload: dict, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    plan_key = payload.get("plan")
-    if plan_key not in pay.PLANS:
-        raise HTTPException(400, "Unknown plan.")
-    base_url = str(request.base_url).rstrip("/")
-    try:
-        session = pay.stripe_create_checkout_session(
-            plan_key, success_url=f"{base_url}/thank-you?plan={plan_key}&gateway=stripe", cancel_url=f"{base_url}/pricing?payment=cancelled"
-        )
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc))
-    db.add(Payment(user_id=user.id, gateway="stripe", gateway_ref=session["id"], plan=plan_key, amount=pay.PLANS[plan_key]["usd"], currency="USD"))
-    db.commit()
-    return session
-
-
-@app.post("/api/payments/paypal/create-order")
-async def paypal_order(payload: dict, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    plan_key = payload.get("plan")
-    if plan_key not in pay.PLANS:
-        raise HTTPException(400, "Unknown plan.")
-    base_url = str(request.base_url).rstrip("/")
-    try:
-        order = await pay.paypal_create_order(
-            plan_key, return_url=f"{base_url}/paypal/return", cancel_url=f"{base_url}/pricing?payment=cancelled"
-        )
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc))
-    db.add(Payment(user_id=user.id, gateway="paypal", gateway_ref=order["id"], plan=plan_key, amount=pay.PLANS[plan_key]["usd"], currency="USD"))
-    db.commit()
-    return order
-
-
-@app.post("/api/payments/paypal/capture/{order_id}")
-async def paypal_capture(order_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    result = await pay.paypal_capture_order(order_id)
-    p = db.query(Payment).filter(Payment.gateway_ref == order_id).first()
-    if p and result.get("status") == "COMPLETED":
-        p.status = "paid"
-        user.plan = p.plan
-        user.credits_remaining = pay.PLANS[p.plan]["credits"]
-        db.commit()
-    return result
 
 
 if __name__ == "__main__":
