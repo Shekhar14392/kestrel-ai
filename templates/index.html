@@ -32,7 +32,7 @@
         <a href="/#platform" class="btn btn-ghost" style="border-color:#C9D3D4;color:#F6F4EE;">See how it works</a>
       </div>
       <div class="hero-stats">
-        <div class="stat"><b>7</b><span>Industry-tuned agents</span></div>
+        <div class="stat"><b>2</b><span>Dedicated AI assistants</span></div>
         <div class="stat"><b>&lt;10 min</b><span>To your first live workflow</span></div>
         <div class="stat"><b>3</b><span>Payment gateways built in</span></div>
       </div>
@@ -48,7 +48,7 @@
       </div>
       <div class="grid">
         <div class="cell"><div class="num">01</div><h3>Visual workflow builder</h3><p>Drag triggers, agents, conditions, and actions onto a canvas and connect them — no code, no YAML.</p></div>
-        <div class="cell"><div class="num">02</div><h3>Industry-specific agents</h3><p>Sales, support, e-commerce, real estate, finance, and clinic front-office agents, tuned out of the box.</p></div>
+        <div class="cell"><div class="num">02</div><h3>Tara & Ved, your AI team</h3><p>Tara handles customers — sales, support, bookings. Ved handles operations — finance, HR, logistics, and business strategy.</p></div>
         <div class="cell"><div class="num">03</div><h3>Live dashboard</h3><p>Track every workflow run, success rate, and credit balance as it happens.</p></div>
         <div class="cell"><div class="num">04</div><h3>Data analysis</h3><p>Drop in a CSV or Excel file and get instant column stats and previews — no formulas required.</p></div>
         <div class="cell"><div class="num">05</div><h3>Flexible plans</h3><p>Start free, scale by credits, or move to enterprise seats — switch anytime.</p></div>
@@ -60,18 +60,27 @@
   <section id="agents" style="padding-top:0;">
     <div class="wrap">
       <div class="section-head">
-        <div class="kicker">Agent roster</div>
-        <h2>Pick an agent, or run several side by side.</h2>
+        <div class="kicker">Meet your AI team</div>
+        <h2>Tara and Ved, ready to work from day one.</h2>
       </div>
     </div>
-    <div class="agent-strip wrap" style="max-width:none; padding:0 24px;">
+    <div class="agent-strip wrap" style="max-width:none; padding:0 24px; justify-content:center; gap:48px;">
       {% for key, a in agents.items() %}
-      <div class="agent-chip">
+      <div class="agent-chip" style="display:flex; flex-direction:column; align-items:center; text-align:center; padding:28px 32px; min-width:220px;">
+        <div class="agent-avatar" style="width:120px; height:120px; margin-bottom:14px;">{{ a.avatar_svg|safe }}</div>
+        <div class="name" style="font-size:1.2rem;">{{ a.name }}</div>
         <div class="role">{{ a.role }}</div>
-        <div class="name">{{ a.name }}</div>
       </div>
       {% endfor %}
     </div>
+    <style>
+      .agent-blink { animation: agent-blink 5s infinite; transform-origin: center; }
+      @keyframes agent-blink {
+        0%, 92%, 100% { transform: scaleY(1); }
+        94% { transform: scaleY(0.1); }
+        96% { transform: scaleY(1); }
+      }
+    </style>
   </section>
 
   <section id="pricing">

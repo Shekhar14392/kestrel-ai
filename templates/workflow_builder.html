@@ -65,7 +65,7 @@ const svg = document.getElementById('wf-edges');
 
 function nodeDefaults(type) {
   if (type === 'trigger') return { label: 'Manual Trigger', config: {} };
-  if (type === 'agent') return { label: 'AI Agent', config: { agent: 'general', prompt: 'Respond helpfully.' } };
+  if (type === 'agent') return { label: 'AI Agent', config: { agent: 'tara', prompt: 'Respond helpfully.' } };
   if (type === 'condition') return { label: 'Condition', config: { variable: '', operator: 'contains', value: '' } };
   if (type === 'webhook') return { label: 'Webhook', config: { url: '' } };
   if (type === 'delay') return { label: 'Delay', config: { seconds: 5 } };

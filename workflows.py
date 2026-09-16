@@ -58,9 +58,9 @@ async def run_workflow(db: Session, workflow: Workflow) -> WorkflowRun:
                 queue.extend(next_nodes(node_id))
 
             elif ntype == "agent":
-                agent_key = cfg.get("agent", "general")
+                agent_key = cfg.get("agent", "tara")
                 prompt = cfg.get("prompt", "Summarize the current context.")
-                agent = AGENTS.get(agent_key, AGENTS["general"])
+                agent = AGENTS.get(agent_key, AGENTS["tara"])
                 filled_prompt = prompt.format(**context["variables"]) if context["variables"] else prompt
                 reply = await call_llm(agent["system"], [{"role": "user", "content": filled_prompt}])
                 context["variables"][f"{node_id}_output"] = reply

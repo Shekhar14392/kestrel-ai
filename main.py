@@ -145,7 +145,7 @@ def chat_page(request: Request, user: User = Depends(get_current_user)):
 async def chat_send(agent_key: str, payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.credits_remaining <= 0:
         raise HTTPException(402, "Out of credits. Please upgrade your plan.")
-    agent = AGENTS.get(agent_key, AGENTS["general"])
+    agent = AGENTS.get(agent_key, AGENTS["tara"])
     text = payload.get("message", "")
     if not text.strip():
         raise HTTPException(400, "Message cannot be empty.")
