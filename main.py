@@ -63,7 +63,7 @@ def signup(payload: dict, response: Response, db: Session = Depends(get_db)):
         raise HTTPException(400, "An account with this email already exists.")
     db.refresh(user)
     token = create_token(user.id)
-    response = JSONResponse({"ok": True, "redirect": "/dashboard"})
+    response = JSONResponse({"ok": True, "redirect": "/welcome"})
     response.set_cookie("kestrel_token", token, httponly=True, max_age=60 * 60 * 24 * 7, samesite="lax")
     return response
 
@@ -86,6 +86,38 @@ def logout():
     response = JSONResponse({"ok": True, "redirect": "/"})
     response.delete_cookie("kestrel_token")
     return response
+
+
+# ---------------------------------------------------------------- Welcome / Thank you
+@app.get("/welcome", response_class=HTMLResponse)
+def welcome(request: Request, user: User = Depends(get_current_user)):
+    return templates.TemplateResponse("welcome.html", {"request": request, "user": user, "agents": AGENTS})
+
+
+@app.get("/thank-you", response_class=HTMLResponse)
+def thank_you(request: Request, user: User = Depends(get_current_user)):
+    plan_key = request.query_params.get("plan")
+    gateway = request.query_params.get("gateway", "")
+    plan = pay.PLANS.get(plan_key)
+    return templates.TemplateResponse(
+        "thank_you.html", {"request": request, "user": user, "plan": plan, "gateway": gateway}
+    )
+
+
+@app.get("/paypal/return")
+async def paypal_return(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    order_id = request.query_params.get("token")
+    if not order_id:
+        return RedirectResponse("/pricing?payment=cancelled")
+    result = await pay.paypal_capture_order(order_id)
+    p = db.query(Payment).filter(Payment.gateway_ref == order_id).first()
+    plan_key = p.plan if p else None
+    if p and result.get("status") == "COMPLETED":
+        p.status = "paid"
+        user.plan = p.plan
+        user.credits_remaining = pay.PLANS[p.plan]["credits"]
+        db.commit()
+    return RedirectResponse(f"/thank-you?plan={plan_key}&gateway=paypal")
 
 
 # ---------------------------------------------------------------- Dashboard
@@ -309,7 +341,7 @@ def stripe_session(payload: dict, request: Request, user: User = Depends(get_cur
     base_url = str(request.base_url).rstrip("/")
     try:
         session = pay.stripe_create_checkout_session(
-            plan_key, success_url=f"{base_url}/dashboard?payment=success", cancel_url=f"{base_url}/pricing?payment=cancelled"
+            plan_key, success_url=f"{base_url}/thank-you?plan={plan_key}&gateway=stripe", cancel_url=f"{base_url}/pricing?payment=cancelled"
         )
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
@@ -319,12 +351,15 @@ def stripe_session(payload: dict, request: Request, user: User = Depends(get_cur
 
 
 @app.post("/api/payments/paypal/create-order")
-async def paypal_order(payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def paypal_order(payload: dict, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     plan_key = payload.get("plan")
     if plan_key not in pay.PLANS:
         raise HTTPException(400, "Unknown plan.")
+    base_url = str(request.base_url).rstrip("/")
     try:
-        order = await pay.paypal_create_order(plan_key)
+        order = await pay.paypal_create_order(
+            plan_key, return_url=f"{base_url}/paypal/return", cancel_url=f"{base_url}/pricing?payment=cancelled"
+        )
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
     db.add(Payment(user_id=user.id, gateway="paypal", gateway_ref=order["id"], plan=plan_key, amount=pay.PLANS[plan_key]["usd"], currency="USD"))

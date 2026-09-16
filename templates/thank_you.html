@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thank you — Kestrel AI</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+  .thankyou-wrap { max-width: 560px; margin: 0 auto; padding: 80px 24px; text-align: center; }
+  .thankyou-check { width: 64px; height: 64px; margin: 0 auto 20px; }
+</style>
+</head>
+<body>
+  <div class="thankyou-wrap">
+    <svg class="thankyou-check" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="32" r="30" fill="#4E8B6C"/>
+      <path d="M18 33 L27 42 L46 22" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="eyebrow">Payment received</div>
+    <h1>Thank you{% if user.full_name %}, {{ user.full_name.split(' ')[0] }}{% endif %}.</h1>
+    {% if plan %}
+    <p class="lead">
+      You're now on the <b>{{ plan.name }}</b> plan — {{ "{:,}".format(plan.credits) }} credits are ready to use.
+    </p>
+    {% else %}
+    <p class="lead">Your payment went through. Your plan has been updated.</p>
+    {% endif %}
+    <p class="muted" style="margin-bottom: 28px;">
+      A receipt has been recorded on your account.{% if gateway %} Paid via {{ gateway|capitalize }}.{% endif %}
+    </p>
+    <a href="/dashboard" class="btn btn-brass" style="display:inline-block;">Go to your dashboard →</a>
+  </div>
+</body>
+</html>

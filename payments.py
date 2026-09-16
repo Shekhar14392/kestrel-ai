@@ -88,7 +88,7 @@ async def paypal_get_access_token() -> str:
         return resp.json()["access_token"]
 
 
-async def paypal_create_order(plan_key: str) -> dict:
+async def paypal_create_order(plan_key: str, return_url: str, cancel_url: str) -> dict:
     plan = PLANS[plan_key]
     base = os.getenv("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com")
     token = await paypal_get_access_token()
@@ -102,8 +102,14 @@ async def paypal_create_order(plan_key: str) -> dict:
                     {
                         "amount": {"currency_code": "USD", "value": str(plan["usd"])},
                         "description": f"Kestrel AI — {plan['name']} plan",
+                        "custom_id": plan_key,
                     }
                 ],
+                "application_context": {
+                    "return_url": return_url,
+                    "cancel_url": cancel_url,
+                    "user_action": "PAY_NOW",
+                },
             },
         )
         resp.raise_for_status()
