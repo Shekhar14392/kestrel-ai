@@ -172,48 +172,96 @@ async def call_llm(system_prompt: str, messages: list[dict]) -> str:
 
 
 async def _call_anthropic(api_key: str, system_prompt: str, messages: list[dict]) -> str:
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": "claude-sonnet-4-6",
-                "max_tokens": 1024,
-                "system": system_prompt,
-                "messages": messages,
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-sonnet-4-6",
+                    "max_tokens": 1024,
+                    "system": system_prompt,
+                    "messages": messages,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 401:
+            raise RuntimeError("Anthropic API key was rejected (invalid or revoked).")
+        if exc.response.status_code == 429:
+            raise RuntimeError("Anthropic rate limit or quota reached. Try again shortly.")
+        raise RuntimeError(f"Anthropic API error ({exc.response.status_code}).")
+    except httpx.RequestError:
+        raise RuntimeError("Could not reach Anthropic's API. Please try again.")
 
 
 async def _call_openai(api_key: str, system_prompt: str, messages: list[dict]) -> str:
     oi_messages = [{"role": "system", "content": system_prompt}] + [
         {"role": m["role"], "content": m["content"]} for m in messages
     ]
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": "gpt-4o-mini", "messages": oi_messages, "max_tokens": 1024},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": "gpt-4o-mini", "messages": oi_messages, "max_tokens": 1024},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 401:
+            raise RuntimeError("OpenAI API key was rejected (invalid or revoked).")
+        if exc.response.status_code == 429:
+            raise RuntimeError("OpenAI rate limit or quota reached. Try again shortly.")
+        raise RuntimeError(f"OpenAI API error ({exc.response.status_code}).")
+    except httpx.RequestError:
+        raise RuntimeError("Could not reach OpenAI's API. Please try again.")
 
 
 async def _call_gemini(api_key: str, system_prompt: str, messages: list[dict]) -> str:
     contents = [{"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]} for m in messages]
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}",
-            json={"system_instruction": {"parts": [{"text": system_prompt}]}, "contents": contents},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}",
+                json={"system_instruction": {"parts": [{"text": system_prompt}]}, "contents": contents},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (400, 403):
+            raise RuntimeError("Gemini API key was rejected (invalid or revoked).")
+        if exc.response.status_code == 429:
+            raise RuntimeError("Gemini rate limit or quota reached. Try again shortly.")
+        raise RuntimeError(f"Gemini API error ({exc.response.status_code}).")
+    except httpx.RequestError:
+        raise RuntimeError("Could not reach Gemini's API. Please try again.")
+
+
+async def call_gemini_required(system_prompt: str, messages: list[dict]) -> str:
+    """Like call_llm, but specifically requires Gemini rather than falling back to another
+    provider. Used for features explicitly meant to run on Gemini."""
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        raise RuntimeError("Gemini is not configured. Set GEMINI_API_KEY.")
+    return await _call_gemini(gemini_key, system_prompt, messages)
+
+
+PAGE_BUILDER_SYSTEM_PROMPT = (
+    "You are an AI page builder. Given a plain-language description of a page (a landing page, "
+    "a funnel step, a booking page, a course page, etc.), output ONE complete, self-contained HTML "
+    "document: <!DOCTYPE html> through </html>, with all CSS inline in a <style> tag in <head>. "
+    "No external stylesheets, no external JS libraries, no placeholder images from other domains "
+    "(use CSS shapes/gradients/emoji instead of images). Make it genuinely presentable: real "
+    "headings, real (invented but plausible) copy matching what was asked for, a clear call-to-"
+    "action button, mobile-responsive layout. Output ONLY the HTML — no explanation, no markdown "
+    "code fences, nothing before <!DOCTYPE html> or after </html>."
+)

@@ -4,6 +4,7 @@
     <a href="/dashboard" class="{{ 'active' if request.url.path == '/dashboard' else '' }}">Overview</a>
     <a href="/chat" class="{{ 'active' if request.url.path == '/chat' else '' }}">Agent Chat</a>
     <a href="/workflows" class="{{ 'active' if '/workflows' in request.url.path else '' }}">Workflows</a>
+    <a href="/page-builder" class="{{ 'active' if request.url.path == '/page-builder' else '' }}">Page Builder</a>
     <a href="/data-analysis" class="{{ 'active' if request.url.path == '/data-analysis' else '' }}">Data Analysis</a>
     <a href="/pricing">Billing & Plans</a>
     {% if user.is_admin %}

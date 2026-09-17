@@ -25,6 +25,7 @@ class User(Base):
     workflows = relationship("Workflow", back_populates="owner", cascade="all, delete-orphan")
     chats = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    generated_pages = relationship("GeneratedPage", back_populates="owner", cascade="all, delete-orphan")
 
 
 class Workflow(Base):
@@ -79,3 +80,15 @@ class Payment(Base):
     created_at = Column(DateTime, default=dt.datetime.utcnow)
 
     user = relationship("User", back_populates="payments")
+
+
+class GeneratedPage(Base):
+    __tablename__ = "generated_pages"
+    id = Column(String, primary_key=True, default=gen_id)
+    owner_id = Column(String, ForeignKey("users.id"))
+    slug = Column(String, unique=True, index=True, nullable=False)
+    prompt = Column(Text)
+    html_content = Column(Text)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    owner = relationship("User", back_populates="generated_pages")

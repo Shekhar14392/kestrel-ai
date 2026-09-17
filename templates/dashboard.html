@@ -25,6 +25,17 @@
     </div>
 
     <div class="panel">
+      <h3>Ask about your data</h3>
+      <p class="muted" style="margin-bottom:12px;">Powered by Gemini. Ask things like "how many workflow runs succeeded?" or "have I spent anything yet?"</p>
+      <div style="display:flex; gap:10px;">
+        <input type="text" id="ask-input" placeholder="Ask a question about your account…" style="flex:1; padding:10px 12px; border:1px solid var(--paper-dim);">
+        <button class="btn btn-brass" id="ask-btn" onclick="askDashboard()">Ask</button>
+      </div>
+      <div id="ask-answer" style="display:none; margin-top:14px; padding:12px; background:#F6F4EE; border:1px solid var(--paper-dim);"></div>
+      <div id="ask-error" style="display:none; margin-top:14px; color:var(--red-fail);"></div>
+    </div>
+
+    <div class="panel">
       <h3>Run activity (last 50 runs)</h3>
       <canvas id="runsChart" height="90"></canvas>
     </div>
@@ -94,6 +105,38 @@ async function loadMetrics() {
 }
 loadMetrics();
 setInterval(loadMetrics, 8000);
+
+async function askDashboard() {
+  const input = document.getElementById('ask-input');
+  const question = input.value.trim();
+  const answerBox = document.getElementById('ask-answer');
+  const errorBox = document.getElementById('ask-error');
+  const btn = document.getElementById('ask-btn');
+  answerBox.style.display = 'none';
+  errorBox.style.display = 'none';
+  if (!question) return;
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const res = await fetch('/api/dashboard/ask', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({question})
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorBox.textContent = data.detail || 'Something went wrong.';
+      errorBox.style.display = 'block';
+    } else {
+      answerBox.textContent = data.answer;
+      answerBox.style.display = 'block';
+    }
+  } catch (e) {
+    errorBox.textContent = 'Network error. Please try again.';
+    errorBox.style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Ask';
+}
 </script>
 </body>
 </html>

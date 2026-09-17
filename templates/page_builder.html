@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Page Builder — Kestrel AI</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+  .pb-composer { display: flex; gap: 10px; margin-bottom: 8px; }
+  .pb-composer textarea { flex: 1; min-height: 70px; padding: 12px; border: 1px solid var(--paper-dim); font: inherit; resize: vertical; }
+  .pb-hint { font-size: 0.85rem; color: var(--slate-soft); margin-bottom: 20px; }
+  .pb-result { display: none; margin-top: 16px; padding: 16px; border: 1px solid var(--green-ok); background: #F3F8F5; }
+  .pb-error { display: none; margin-top: 16px; padding: 12px; border: 1px solid var(--red-fail); background: #FBF0ED; color: var(--red-fail); }
+  .pb-list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--paper-dim); }
+  .pb-list-item:last-child { border-bottom: none; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  {% include "_sidebar.html" %}
+  <div class="main-area">
+    <div class="topbar">
+      <h1>AI Page Builder</h1>
+      <span class="muted">Describe it, the AI builds it — a live page in seconds</span>
+    </div>
+
+    <div class="panel">
+      <h3>Describe the page you want</h3>
+      <p class="pb-hint">e.g. "A booking page for a dental clinic specializing in smile correction" — costs 5 credits per page.</p>
+      <div class="pb-composer">
+        <textarea id="pb-prompt" placeholder="Build me a landing page for..."></textarea>
+      </div>
+      <button class="btn btn-brass" onclick="generatePage()" id="pb-generate-btn">Generate page →</button>
+
+      <div class="pb-result" id="pb-result">
+        <strong>Your page is live:</strong>
+        <a href="#" id="pb-result-link" target="_blank"></a>
+      </div>
+      <div class="pb-error" id="pb-error"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Your generated pages</h3>
+      <div id="pb-list">
+        {% if pages %}
+          {% for p in pages %}
+          <div class="pb-list-item" data-page-id="{{ p.id }}">
+            <div>
+              <a href="/p/{{ p.slug }}" target="_blank">/p/{{ p.slug }}</a>
+              <div class="muted" style="font-size:0.85rem;">{{ p.prompt[:70] }}{% if p.prompt|length > 70 %}…{% endif %}</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="deletePage('{{ p.id }}')">Delete</button>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="muted">No pages generated yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function generatePage() {
+  const prompt = document.getElementById('pb-prompt').value.trim();
+  const btn = document.getElementById('pb-generate-btn');
+  const resultBox = document.getElementById('pb-result');
+  const errorBox = document.getElementById('pb-error');
+  resultBox.style.display = 'none';
+  errorBox.style.display = 'none';
+  if (!prompt) { return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Building…';
+  try {
+    const res = await fetch('/api/pages/generate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt})
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorBox.textContent = data.detail || 'Something went wrong.';
+      errorBox.style.display = 'block';
+    } else {
+      const link = document.getElementById('pb-result-link');
+      link.href = data.url;
+      link.textContent = window.location.origin + data.url;
+      resultBox.style.display = 'block';
+      const list = document.getElementById('pb-list');
+      const empty = list.querySelector('.muted');
+      if (empty) empty.remove();
+      const item = document.createElement('div');
+      item.className = 'pb-list-item';
+      item.innerHTML = `<div><a href="${data.url}" target="_blank">${data.url}</a><div class="muted" style="font-size:0.85rem;">${prompt.slice(0,70)}</div></div>`;
+      list.prepend(item);
+      document.getElementById('pb-prompt').value = '';
+    }
+  } catch (e) {
+    errorBox.textContent = 'Network error. Please try again.';
+    errorBox.style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Generate page →';
+}
+
+async function deletePage(id) {
+  await fetch('/api/pages/' + id, { method: 'DELETE' });
+  document.querySelector(`[data-page-id="${id}"]`).remove();
+}
+</script>
+</body>
+</html>

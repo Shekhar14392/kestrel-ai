@@ -12,11 +12,13 @@ from sqlalchemy.exc import IntegrityError
 import pandas as pd
 
 from database import Base, engine, get_db
-from models import User, Workflow, WorkflowRun, ChatMessage, Payment
+from models import User, Workflow, WorkflowRun, ChatMessage, Payment, GeneratedPage
 from auth import hash_password, verify_password, create_token, get_current_user, get_current_user_optional, get_current_admin, is_configured_admin_email
-from agents import AGENTS, call_llm
+from agents import AGENTS, call_llm, call_gemini_required, PAGE_BUILDER_SYSTEM_PROMPT
 from workflows import run_workflow
 import payments as pay
+import re
+import secrets
 
 Base.metadata.create_all(bind=engine)
 
@@ -242,6 +244,97 @@ async def chat_send(agent_key: str, payload: dict, user: User = Depends(get_curr
     user.credits_remaining = max(0, user.credits_remaining - 1)
     db.commit()
     return {"reply": reply, "agent": agent["name"], "credits_remaining": user.credits_remaining}
+
+
+# ---------------------------------------------------------------- AI Page Builder
+def make_page_slug() -> str:
+    return secrets.token_urlsafe(6).lower().replace("_", "").replace("-", "")
+
+
+@app.get("/page-builder", response_class=HTMLResponse)
+def page_builder_page(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    pages = db.query(GeneratedPage).filter(GeneratedPage.owner_id == user.id).order_by(GeneratedPage.created_at.desc()).all()
+    return templates.TemplateResponse("page_builder.html", {"request": request, "user": user, "pages": pages})
+
+
+@app.post("/api/pages/generate")
+async def generate_page(payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.credits_remaining < 5:
+        raise HTTPException(402, "Not enough credits. Page generation costs 5 credits.")
+    prompt = payload.get("prompt", "").strip()
+    if not prompt:
+        raise HTTPException(400, "Describe the page you want built.")
+
+    try:
+        html = await call_llm(PAGE_BUILDER_SYSTEM_PROMPT, [{"role": "user", "content": prompt}])
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc))
+
+    html = re.sub(r"^```html\s*|```\s*$", "", html.strip())
+    if "<!DOCTYPE" not in html and "<html" not in html.lower():
+        raise HTTPException(502, "The AI didn't return a usable page. Try rephrasing your description.")
+
+    slug = make_page_slug()
+    while db.query(GeneratedPage).filter(GeneratedPage.slug == slug).first():
+        slug = make_page_slug()
+
+    page = GeneratedPage(owner_id=user.id, slug=slug, prompt=prompt, html_content=html)
+    db.add(page)
+    user.credits_remaining -= 5
+    db.commit()
+    return {"slug": slug, "url": f"/p/{slug}", "credits_remaining": user.credits_remaining}
+
+
+@app.get("/p/{slug}", response_class=HTMLResponse)
+def view_generated_page(slug: str, db: Session = Depends(get_db)):
+    page = db.query(GeneratedPage).filter(GeneratedPage.slug == slug).first()
+    if not page:
+        raise HTTPException(404, "Page not found.")
+    return HTMLResponse(page.html_content)
+
+
+@app.delete("/api/pages/{page_id}")
+def delete_page(page_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    page = db.query(GeneratedPage).filter(GeneratedPage.id == page_id, GeneratedPage.owner_id == user.id).first()
+    if not page:
+        raise HTTPException(404, "Page not found.")
+    db.delete(page)
+    db.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- Dashboard AI Q&A (Gemini)
+@app.post("/api/dashboard/ask")
+async def dashboard_ask(payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    question = payload.get("question", "").strip()
+    if not question:
+        raise HTTPException(400, "Ask a question first.")
+
+    wf_ids = [w.id for w in db.query(Workflow).filter(Workflow.owner_id == user.id).all()]
+    total_runs = db.query(WorkflowRun).filter(WorkflowRun.workflow_id.in_(wf_ids)).count()
+    success_runs = db.query(WorkflowRun).filter(WorkflowRun.workflow_id.in_(wf_ids), WorkflowRun.status == "success").count()
+    chat_count = db.query(ChatMessage).filter(ChatMessage.user_id == user.id).count()
+    payments = db.query(Payment).filter(Payment.user_id == user.id, Payment.status == "paid").all()
+    total_spent = sum(p.amount for p in payments)
+    pages_built = db.query(GeneratedPage).filter(GeneratedPage.owner_id == user.id).count()
+
+    context = (
+        f"Here is this user's real Kestrel AI account data:\n"
+        f"- Plan: {user.plan}\n"
+        f"- Credits remaining: {user.credits_remaining}\n"
+        f"- Total workflow runs: {total_runs} ({success_runs} successful)\n"
+        f"- Total chat messages sent: {chat_count}\n"
+        f"- Pages built with the AI page builder: {pages_built}\n"
+        f"- Total paid to date: {total_spent} INR across {len(payments)} payment(s)\n"
+        f"Answer the user's question using ONLY this data. Be brief and direct. If the data doesn't "
+        f"answer their question, say so plainly rather than guessing."
+    )
+
+    try:
+        answer = await call_gemini_required(context, [{"role": "user", "content": question}])
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc))
+    return {"answer": answer}
 
 
 # ---------------------------------------------------------------- Workflow Builder
