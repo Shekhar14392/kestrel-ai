@@ -3,9 +3,30 @@ import hmac
 import hashlib
 
 PLANS = {
-    "starter": {"name": "Starter", "usd": 99, "inr": 8199, "credits": 3000},
-    "growth": {"name": "Growth", "usd": 199, "inr": 16499, "credits": 8000},
-    "enterprise": {"name": "Enterprise", "usd": 499, "inr": 41499, "credits": 25000, "custom_above": True},
+    "solo": {
+        "name": "Solo", "usd": 49, "inr": 4059, "credits": 1200,
+        "features": ["Up to 1 active workflow", "All 16 agents, standard usage", "Community support"],
+    },
+    "starter": {
+        "name": "Starter", "usd": 99, "inr": 8199, "credits": 3000,
+        "features": ["Up to 3 active workflows", "All 16 agents, standard usage", "Email support"],
+    },
+    "growth": {
+        "name": "Growth", "usd": 199, "inr": 16499, "credits": 8000,
+        "features": ["Unlimited workflows", "All agents, full usage", "CSV/Excel data analysis", "Priority support"],
+    },
+    "scale": {
+        "name": "Scale", "usd": 349, "inr": 28899, "credits": 15000,
+        "features": ["Everything in Growth", "AI Page Builder included", "Higher rate limits", "Priority support"],
+    },
+    "pro": {
+        "name": "Pro", "usd": 499, "inr": 41499, "credits": 25000,
+        "features": ["Everything in Scale", "Dedicated onboarding", "Custom agent tuning", "SLA support"],
+    },
+    "enterprise": {
+        "name": "Enterprise", "usd": 999, "inr": 82899, "credits": 60000, "custom_above": True,
+        "features": ["Everything in Pro", "Custom credit limits above 60,000/month", "Dedicated account manager", "SLA + priority support"],
+    },
 }
 
 # Given to every new signup before they choose a paid plan. Not sold, not shown on

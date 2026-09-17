@@ -5,6 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kestrel AI — The Agent Platform for Running Your Business on Autopilot</title>
 <link rel="stylesheet" href="/static/css/style.css">
+<script>
+(function() {
+  var palettes = [
+    { brass: '#C9A227', brassDim: '#A6841E' },  // gold (default)
+    { brass: '#2E8B8B', brassDim: '#256F6F' },  // teal
+    { brass: '#C9622A', brassDim: '#A64F22' },  // terracotta
+    { brass: '#7B5EA7', brassDim: '#634B87' },  // violet
+    { brass: '#C94F6D', brassDim: '#A63F59' },  // rose
+    { brass: '#2E6FA6', brassDim: '#255A87' }   // ocean blue
+  ];
+  var p = palettes[Math.floor(Math.random() * palettes.length)];
+  var root = document.documentElement.style;
+  root.setProperty('--brass', p.brass);
+  root.setProperty('--brass-dim', p.brassDim);
+})();
+</script>
 </head>
 <body>
   <div class="nav">
@@ -24,9 +40,9 @@
 
   <section class="hero">
     <div class="wrap">
-      <div class="eyebrow">No-code AI agent platform</div>
-      <h1>Build, deploy, and run AI agents for every part of your business — without a single line of code.</h1>
-      <p class="lead">Kestrel AI combines industry-specific agents, a visual workflow builder, live monitoring, and built-in billing so a team of one can run automation like a team of twenty.</p>
+      <div class="eyebrow" id="hero-eyebrow">No-code AI agent platform</div>
+      <h1 id="hero-h1">Build, deploy, and run AI agents for every part of your business — without a single line of code.</h1>
+      <p class="lead" id="hero-lead">Kestrel AI combines industry-specific agents, a visual workflow builder, live monitoring, and built-in billing so a team of one can run automation like a team of twenty.</p>
       <div class="cta-row">
         <a href="/signup" class="btn btn-brass">Start free — no card needed</a>
         <a href="/#platform" class="btn btn-ghost" style="border-color:#C9D3D4;color:#F6F4EE;">See how it works</a>
@@ -34,10 +50,40 @@
       <div class="hero-stats">
         <div class="stat"><b>16</b><span>AI assistants</span></div>
         <div class="stat"><b>&lt;10 min</b><span>To your first live workflow</span></div>
-        <div class="stat"><b>3</b><span>Payment gateways built in</span></div>
+        <div class="stat"><b>50</b><span>Free trial credits, no card needed</span></div>
       </div>
     </div>
   </section>
+  <script>
+  (function() {
+    var variants = [
+      {
+        eyebrow: 'No-code AI agent platform',
+        h1: 'Build, deploy, and run AI agents for every part of your business — without a single line of code.',
+        lead: 'Kestrel AI combines industry-specific agents, a visual workflow builder, live monitoring, and built-in billing so a team of one can run automation like a team of twenty.'
+      },
+      {
+        eyebrow: 'Your business, on autopilot',
+        h1: 'Sixteen AI assistants, ready to run sales, support, and operations while you sleep.',
+        lead: 'From first customer message to final payment, Kestrel AI handles the work — no developer, no manual setup, no code.'
+      },
+      {
+        eyebrow: 'Built for solo operators',
+        h1: 'Run a team of twenty with a team of one.',
+        lead: 'Tara and Ved lead sixteen AI assistants that qualify leads, answer support tickets, and manage operations — all from one dashboard.'
+      },
+      {
+        eyebrow: 'Live in under 10 minutes',
+        h1: 'Describe your business. Kestrel AI builds the workflow.',
+        lead: 'Drag-and-drop automation, industry-tuned agents, and billing that works from day one — start free, no card needed.'
+      }
+    ];
+    var v = variants[Math.floor(Math.random() * variants.length)];
+    document.getElementById('hero-eyebrow').textContent = v.eyebrow;
+    document.getElementById('hero-h1').textContent = v.h1;
+    document.getElementById('hero-lead').textContent = v.lead;
+  })();
+  </script>
 
   <section id="platform">
     <div class="wrap">
@@ -100,21 +146,9 @@
           <div class="price">${{ p.usd }}<small>/month</small></div>
           <ul>
             <li>{{ "{:,}".format(p.credits) }} AI credits / month{% if p.get('custom_above') %} — higher limits available{% endif %}</li>
-            {% if key == 'starter' %}
-            <li>Up to 3 active workflows</li>
-            <li>All agents, standard usage</li>
-            <li>Email support</li>
-            {% elif key == 'growth' %}
-            <li>Unlimited workflows</li>
-            <li>All agents, full usage</li>
-            <li>CSV/Excel data analysis</li>
-            <li>Priority support</li>
-            {% else %}
-            <li>Everything in Growth</li>
-            <li>Custom credit limits above 25,000/month</li>
-            <li>Dedicated onboarding & custom agent tuning</li>
-            <li>SLA + priority support</li>
-            {% endif %}
+            {% for feature in p.features %}
+            <li>{{ feature }}</li>
+            {% endfor %}
           </ul>
           {% if user %}
             {% if user.plan == key %}
@@ -128,7 +162,7 @@
         </div>
         {% endfor %}
       </div>
-      <p class="muted" style="margin-top:20px; font-size:0.85rem;">New accounts start with a 50-credit trial to explore agents and workflows before choosing a plan. Need more than 25,000 Enterprise credits, invoicing, or seats — <a href="mailto:hello@kestrel.ai" style="text-decoration:underline;">contact us</a> for custom limits.</p>
+      <p class="muted" style="margin-top:20px; font-size:0.85rem;">New accounts start with a 50-credit trial to explore agents and workflows before choosing a plan. Need more than 60,000 Enterprise credits, invoicing, or seats — <a href="mailto:hello@kestrel.ai" style="text-decoration:underline;">contact us</a> for custom limits.</p>
     </div>
   </section>
 

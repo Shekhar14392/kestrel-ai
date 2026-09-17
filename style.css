@@ -101,7 +101,7 @@ section { padding: 84px 24px; }
 .agent-chip .name { font-family: 'Fraunces', serif; font-size: 1.1rem; margin-top: 4px; }
 
 /* ---- Pricing ---- */
-.pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
 .plan-card { border: 1px solid var(--paper-dim); padding: 32px; background: var(--paper); display: flex; flex-direction: column; }
 .plan-card.featured { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass); position: relative; }
 .plan-card.featured::before { content: 'Most chosen'; position: absolute; top: -13px; left: 32px; background: var(--brass); color: var(--ink); font-size: 0.75rem; font-weight: 700; padding: 3px 10px; }
