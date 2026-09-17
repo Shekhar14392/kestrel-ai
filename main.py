@@ -13,7 +13,7 @@ import pandas as pd
 
 from database import Base, engine, get_db
 from models import User, Workflow, WorkflowRun, ChatMessage, Payment
-from auth import hash_password, verify_password, create_token, get_current_user, get_current_user_optional
+from auth import hash_password, verify_password, create_token, get_current_user, get_current_user_optional, get_current_admin, is_configured_admin_email
 from agents import AGENTS, call_llm
 from workflows import run_workflow
 import payments as pay
@@ -54,7 +54,8 @@ def signup(payload: dict, response: Response, db: Session = Depends(get_db)):
         raise HTTPException(400, "Valid email and a password of at least 6 characters are required.")
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(400, "An account with this email already exists.")
-    user = User(email=email, hashed_password=hash_password(password), full_name=full_name, company=company)
+    user = User(email=email, hashed_password=hash_password(password), full_name=full_name, company=company,
+                is_admin=is_configured_admin_email(email))
     db.add(user)
     try:
         db.commit()
@@ -75,6 +76,9 @@ def login(payload: dict, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(password, user.hashed_password):
         raise HTTPException(401, "Incorrect email or password.")
+    if is_configured_admin_email(email) and not user.is_admin:
+        user.is_admin = True
+        db.commit()
     token = create_token(user.id)
     response = JSONResponse({"ok": True, "redirect": "/dashboard"})
     response.set_cookie("kestrel_token", token, httponly=True, max_age=60 * 60 * 24 * 7, samesite="lax")
@@ -112,6 +116,55 @@ def dashboard(request: Request, user: User = Depends(get_current_user), db: Sess
     workflows = db.query(Workflow).filter(Workflow.owner_id == user.id).all()
     return templates.TemplateResponse(
         "dashboard.html", {"request": request, "user": user, "workflows": workflows, "plans": pay.PLANS}
+    )
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_dashboard(request: Request, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    total_users = db.query(User).count()
+    users_by_plan = dict(db.query(User.plan, func.count(User.id)).group_by(User.plan).all())
+
+    total_revenue = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(Payment.status == "paid").scalar()
+    revenue_by_plan = dict(
+        db.query(Payment.plan, func.coalesce(func.sum(Payment.amount), 0))
+        .filter(Payment.status == "paid").group_by(Payment.plan).all()
+    )
+    payment_count = db.query(Payment).filter(Payment.status == "paid").count()
+
+    messages_by_agent = dict(
+        db.query(ChatMessage.agent_key, func.count(ChatMessage.id))
+        .filter(ChatMessage.role == "user").group_by(ChatMessage.agent_key).all()
+    )
+    total_messages = db.query(ChatMessage).filter(ChatMessage.role == "user").count()
+
+    recent_signups = db.query(User).order_by(User.created_at.desc()).limit(10).all()
+    recent_payments = db.query(Payment).filter(Payment.status == "paid").order_by(Payment.created_at.desc()).limit(10).all()
+    recent_chats = (
+        db.query(ChatMessage, User)
+        .join(User, ChatMessage.user_id == User.id)
+        .filter(ChatMessage.role == "user")
+        .order_by(ChatMessage.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        "admin.html",
+        {
+            "request": request,
+            "user": admin,
+            "agents": AGENTS,
+            "total_users": total_users,
+            "users_by_plan": users_by_plan,
+            "total_revenue": total_revenue,
+            "revenue_by_plan": revenue_by_plan,
+            "payment_count": payment_count,
+            "messages_by_agent": messages_by_agent,
+            "total_messages": total_messages,
+            "recent_signups": recent_signups,
+            "recent_payments": recent_payments,
+            "recent_chats": recent_chats,
+        },
     )
 
 
@@ -169,6 +222,7 @@ async def chat_send(agent_key: str, payload: dict, user: User = Depends(get_curr
         raise HTTPException(400, "Message cannot be empty.")
 
     db.add(ChatMessage(user_id=user.id, agent_key=agent_key, role="user", content=text))
+    db.commit()
     history = (
         db.query(ChatMessage)
         .filter(ChatMessage.user_id == user.id, ChatMessage.agent_key == agent_key)

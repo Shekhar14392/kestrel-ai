@@ -19,6 +19,7 @@ class User(Base):
     plan = Column(String, default="trial")  # trial (unpaid) / starter / growth / enterprise
     plan_expires = Column(DateTime, nullable=True)
     credits_remaining = Column(Integer, default=50)  # trial credits; see payments.TRIAL_CREDITS
+    is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=dt.datetime.utcnow)
 
     workflows = relationship("Workflow", back_populates="owner", cascade="all, delete-orphan")

@@ -63,3 +63,14 @@ def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
         return get_current_user(request, db)
     except HTTPException:
         return None
+
+
+def get_current_admin(user: User = Depends(get_current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+def is_configured_admin_email(email: str) -> bool:
+    admin_email = os.getenv("ADMIN_EMAIL", "")
+    return bool(admin_email) and email.strip().lower() == admin_email.strip().lower()

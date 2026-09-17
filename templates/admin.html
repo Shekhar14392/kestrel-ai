@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Kestrel AI</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+  .admin-wrap { max-width: 1000px; margin: 0 auto; padding: 32px 20px 80px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin: 24px 0 32px; }
+  .kpi-row .kpi b { display: block; font-size: 1.8rem; }
+  .admin-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  .admin-table th, .admin-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--paper-dim); }
+  .admin-table th { color: var(--slate-soft); font-weight: 600; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  {% include "_sidebar.html" %}
+  <div class="admin-wrap">
+    <div class="eyebrow">Admin</div>
+    <h1>Platform overview</h1>
+    <p class="muted">Visible only to admin accounts. Not a customer-facing page.</p>
+
+    <div class="kpi-row">
+      <div class="kpi"><b>{{ total_users }}</b>Total users</div>
+      <div class="kpi"><b>₹{{ "{:,.0f}".format(total_revenue) }}</b>Revenue (paid)</div>
+      <div class="kpi"><b>{{ payment_count }}</b>Successful payments</div>
+      <div class="kpi"><b>{{ total_messages }}</b>Messages sent</div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h3>Users by plan</h3>
+        <table class="admin-table">
+          <tr><th>Plan</th><th>Users</th></tr>
+          {% for plan, count in users_by_plan.items() %}
+          <tr><td>{{ plan }}</td><td>{{ count }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+
+      <div class="panel">
+        <h3>Revenue by plan</h3>
+        <table class="admin-table">
+          <tr><th>Plan</th><th>Revenue</th></tr>
+          {% for plan, amt in revenue_by_plan.items() %}
+          <tr><td>{{ plan }}</td><td>₹{{ "{:,.0f}".format(amt) }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:24px;">
+      <h3>Agent activity — messages sent, by agent</h3>
+      <table class="admin-table">
+        <tr><th>Agent</th><th>Role</th><th>Messages</th></tr>
+        {% for key, a in agents.items() %}
+        <tr><td>{{ a.name }}</td><td>{{ a.role }}</td><td>{{ messages_by_agent.get(key, 0) }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <div class="two-col" style="margin-top:24px;">
+      <div class="panel">
+        <h3>Recent signups</h3>
+        <table class="admin-table">
+          <tr><th>Name</th><th>Email</th><th>Plan</th><th>Joined</th></tr>
+          {% for u in recent_signups %}
+          <tr><td>{{ u.full_name or "—" }}</td><td>{{ u.email }}</td><td>{{ u.plan }}</td><td>{{ u.created_at.strftime("%b %d") }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+
+      <div class="panel">
+        <h3>Recent payments</h3>
+        <table class="admin-table">
+          <tr><th>Plan</th><th>Amount</th><th>Gateway</th><th>Date</th></tr>
+          {% for p in recent_payments %}
+          <tr><td>{{ p.plan }}</td><td>{{ p.currency }} {{ "{:,.0f}".format(p.amount) }}</td><td>{{ p.gateway }}</td><td>{{ p.created_at.strftime("%b %d") }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:24px;">
+      <h3>Recent customer interactions</h3>
+      <table class="admin-table">
+        <tr><th>Customer</th><th>Agent</th><th>Message</th><th>When</th></tr>
+        {% for msg, u in recent_chats %}
+        <tr>
+          <td>{{ u.full_name or u.email }}</td>
+          <td>{{ agents.get(msg.agent_key, {}).get("name", msg.agent_key) }}</td>
+          <td>{{ msg.content[:80] }}{% if msg.content|length > 80 %}…{% endif %}</td>
+          <td>{{ msg.created_at.strftime("%b %d, %H:%M") }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+</body>
+</html>

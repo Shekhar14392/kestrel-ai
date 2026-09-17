@@ -6,6 +6,9 @@
     <a href="/workflows" class="{{ 'active' if '/workflows' in request.url.path else '' }}">Workflows</a>
     <a href="/data-analysis" class="{{ 'active' if request.url.path == '/data-analysis' else '' }}">Data Analysis</a>
     <a href="/pricing">Billing & Plans</a>
+    {% if user.is_admin %}
+    <a href="/admin" class="{{ 'active' if request.url.path == '/admin' else '' }}">Admin</a>
+    {% endif %}
   </nav>
   <div class="plan-badge">
     Plan: <strong>{{ user.plan|capitalize }}</strong><br>
