@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kestrel AI — The Agent Platform for Running Your Business on Autopilot</title>
+<title>{{ seo.meta_title if seo else "Kestrel AI — The Agent Platform for Running Your Business on Autopilot" }}</title>
+<meta name="description" content="{{ seo.meta_description if seo else 'Build, deploy, and run AI agents for every part of your business — without a single line of code.' }}">
+{% if seo and seo.meta_keywords %}<meta name="keywords" content="{{ seo.meta_keywords }}">{% endif %}
+<meta property="og:title" content="{{ seo.meta_title if seo else 'Kestrel AI' }}">
+<meta property="og:description" content="{{ seo.meta_description if seo else 'Build, deploy, and run AI agents for every part of your business.' }}">
+<meta property="og:type" content="website">
+{% if seo and seo.og_image_url %}<meta property="og:image" content="{{ seo.og_image_url }}">{% endif %}
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="/static/css/style.css">
 <script>
 (function() {

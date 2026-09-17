@@ -92,3 +92,17 @@ class GeneratedPage(Base):
     created_at = Column(DateTime, default=dt.datetime.utcnow)
 
     owner = relationship("User", back_populates="generated_pages")
+
+
+class SiteSettings(Base):
+    __tablename__ = "site_settings"
+    id = Column(String, primary_key=True, default=lambda: "default")
+    meta_title = Column(String, default="Kestrel AI — The Agent Platform for Running Your Business on Autopilot")
+    meta_description = Column(
+        Text,
+        default="Build, deploy, and run AI agents for every part of your business — without a single line of "
+                "code. 16 industry-tuned AI assistants, a visual workflow builder, and built-in billing.",
+    )
+    meta_keywords = Column(String, default="AI agents, no-code automation, AI assistant platform, business automation")
+    og_image_url = Column(String, default="")
+    updated_at = Column(DateTime, default=dt.datetime.utcnow, onupdate=dt.datetime.utcnow)

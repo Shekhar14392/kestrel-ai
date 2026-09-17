@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 import pandas as pd
 
 from database import Base, engine, get_db
-from models import User, Workflow, WorkflowRun, ChatMessage, Payment, GeneratedPage
+from models import User, Workflow, WorkflowRun, ChatMessage, Payment, GeneratedPage, SiteSettings
 from auth import hash_password, verify_password, create_token, get_current_user, get_current_user_optional, get_current_admin, is_configured_admin_email
 from agents import AGENTS, call_llm, call_gemini_required, PAGE_BUILDER_SYSTEM_PROMPT
 from workflows import run_workflow
@@ -28,11 +28,38 @@ templates = Jinja2Templates(directory="templates")
 
 
 # ---------------------------------------------------------------- Landing / Pricing
+def get_site_settings(db: Session) -> SiteSettings:
+    settings = db.query(SiteSettings).filter(SiteSettings.id == "default").first()
+    if not settings:
+        settings = SiteSettings(id="default")
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+
 @app.get("/", response_class=HTMLResponse)
-def landing(request: Request, user: User = Depends(get_current_user_optional)):
+def landing(request: Request, user: User = Depends(get_current_user_optional), db: Session = Depends(get_db)):
+    settings = get_site_settings(db)
     return templates.TemplateResponse(
-        "index.html", {"request": request, "user": user, "plans": pay.PLANS, "agents": AGENTS}
+        "index.html", {"request": request, "user": user, "plans": pay.PLANS, "agents": AGENTS, "seo": settings}
     )
+
+
+@app.get("/robots.txt", response_class=Response)
+def robots_txt(request: Request):
+    base = str(request.base_url).rstrip("/")
+    body = f"User-agent: *\nAllow: /\nDisallow: /dashboard\nDisallow: /admin\nDisallow: /chat\nDisallow: /workflows\nDisallow: /page-builder\nDisallow: /data-analysis\nDisallow: /welcome\n\nSitemap: {base}/sitemap.xml\n"
+    return Response(content=body, media_type="text/plain")
+
+
+@app.get("/sitemap.xml", response_class=Response)
+def sitemap_xml(request: Request):
+    base = str(request.base_url).rstrip("/")
+    urls = ["/", "/pricing", "/login", "/signup"]
+    items = "".join(f"<url><loc>{base}{u}</loc></url>" for u in urls)
+    body = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>'
+    return Response(content=body, media_type="application/xml")
 
 
 # ---------------------------------------------------------------- Auth pages
@@ -150,6 +177,8 @@ def admin_dashboard(request: Request, admin: User = Depends(get_current_admin), 
         .all()
     )
 
+    seo = get_site_settings(db)
+
     return templates.TemplateResponse(
         "admin.html",
         {
@@ -166,8 +195,32 @@ def admin_dashboard(request: Request, admin: User = Depends(get_current_admin), 
             "recent_signups": recent_signups,
             "recent_payments": recent_payments,
             "recent_chats": recent_chats,
+            "seo": seo,
         },
     )
+
+
+@app.post("/api/admin/seo")
+def update_seo(payload: dict, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    settings = get_site_settings(db)
+    title = payload.get("meta_title", "").strip()
+    description = payload.get("meta_description", "").strip()
+    keywords = payload.get("meta_keywords", "").strip()
+    og_image = payload.get("og_image_url", "").strip()
+
+    if not title or not description:
+        raise HTTPException(400, "Title and description can't be empty.")
+    if len(title) > 70:
+        raise HTTPException(400, "Title should be 70 characters or fewer for search results.")
+    if len(description) > 160:
+        raise HTTPException(400, "Description should be 160 characters or fewer for search results.")
+
+    settings.meta_title = title
+    settings.meta_description = description
+    settings.meta_keywords = keywords
+    settings.og_image_url = og_image
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/api/metrics")

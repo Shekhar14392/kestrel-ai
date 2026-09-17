@@ -98,6 +98,61 @@
         {% endfor %}
       </table>
     </div>
+    <div class="panel" style="margin-top:24px;">
+      <h3>SEO controls</h3>
+      <p class="muted" style="margin-bottom:14px;">Controls the landing page's title, meta description, and social preview. Changes apply immediately.</p>
+      <div id="seo-error" style="display:none; color:var(--red-fail); margin-bottom:12px;"></div>
+      <div id="seo-success" style="display:none; color:var(--green-ok); margin-bottom:12px;">Saved.</div>
+      <label style="display:block; margin-bottom:12px;">
+        <span style="display:block; font-size:0.85rem; margin-bottom:4px;">Page title <span class="muted" id="title-count"></span></span>
+        <input type="text" id="seo-title" value="{{ seo.meta_title }}" maxlength="70" style="width:100%; padding:8px 10px; border:1px solid var(--paper-dim);">
+      </label>
+      <label style="display:block; margin-bottom:12px;">
+        <span style="display:block; font-size:0.85rem; margin-bottom:4px;">Meta description <span class="muted" id="desc-count"></span></span>
+        <textarea id="seo-description" maxlength="160" style="width:100%; min-height:70px; padding:8px 10px; border:1px solid var(--paper-dim); font:inherit;">{{ seo.meta_description }}</textarea>
+      </label>
+      <label style="display:block; margin-bottom:12px;">
+        <span style="display:block; font-size:0.85rem; margin-bottom:4px;">Keywords (comma-separated)</span>
+        <input type="text" id="seo-keywords" value="{{ seo.meta_keywords }}" style="width:100%; padding:8px 10px; border:1px solid var(--paper-dim);">
+      </label>
+      <label style="display:block; margin-bottom:16px;">
+        <span style="display:block; font-size:0.85rem; margin-bottom:4px;">Social preview image URL (optional)</span>
+        <input type="text" id="seo-og-image" value="{{ seo.og_image_url }}" placeholder="https://..." style="width:100%; padding:8px 10px; border:1px solid var(--paper-dim);">
+      </label>
+      <button class="btn btn-brass" onclick="saveSeo()">Save SEO settings</button>
+      <p class="muted" style="margin-top:12px; font-size:0.85rem;"><a href="/robots.txt" target="_blank">View robots.txt</a> · <a href="/sitemap.xml" target="_blank">View sitemap.xml</a></p>
+    </div>
   </div>
+
+  <script>
+    function updateSeoCounts() {
+      document.getElementById('title-count').textContent = document.getElementById('seo-title').value.length + '/70';
+      document.getElementById('desc-count').textContent = document.getElementById('seo-description').value.length + '/160';
+    }
+    document.getElementById('seo-title').addEventListener('input', updateSeoCounts);
+    document.getElementById('seo-description').addEventListener('input', updateSeoCounts);
+    updateSeoCounts();
+
+    async function saveSeo() {
+      const errorBox = document.getElementById('seo-error');
+      const successBox = document.getElementById('seo-success');
+      errorBox.style.display = 'none';
+      successBox.style.display = 'none';
+      const payload = {
+        meta_title: document.getElementById('seo-title').value,
+        meta_description: document.getElementById('seo-description').value,
+        meta_keywords: document.getElementById('seo-keywords').value,
+        og_image_url: document.getElementById('seo-og-image').value,
+      };
+      const res = await fetch('/api/admin/seo', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) {
+        errorBox.textContent = data.detail || 'Something went wrong.';
+        errorBox.style.display = 'block';
+      } else {
+        successBox.style.display = 'block';
+      }
+    }
+  </script>
 </body>
 </html>
