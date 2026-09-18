@@ -179,6 +179,15 @@ def admin_dashboard(request: Request, admin: User = Depends(get_current_admin), 
 
     seo = get_site_settings(db)
 
+    provider_status = [
+        {"name": "Anthropic (Claude)", "env_var": "ANTHROPIC_API_KEY", "configured": bool(os.getenv("ANTHROPIC_API_KEY")), "free_tier": False},
+        {"name": "OpenAI (ChatGPT)", "env_var": "OPENAI_API_KEY", "configured": bool(os.getenv("OPENAI_API_KEY")), "free_tier": False},
+        {"name": "Gemini", "env_var": "GEMINI_API_KEY", "configured": bool(os.getenv("GEMINI_API_KEY")), "free_tier": True},
+        {"name": "Groq", "env_var": "GROQ_API_KEY", "configured": bool(os.getenv("GROQ_API_KEY")), "free_tier": True},
+        {"name": "Mistral", "env_var": "MISTRAL_API_KEY", "configured": bool(os.getenv("MISTRAL_API_KEY")), "free_tier": True},
+    ]
+    configured_count = sum(1 for p in provider_status if p["configured"])
+
     return templates.TemplateResponse(
         "admin.html",
         {
@@ -196,6 +205,8 @@ def admin_dashboard(request: Request, admin: User = Depends(get_current_admin), 
             "recent_payments": recent_payments,
             "recent_chats": recent_chats,
             "seo": seo,
+            "provider_status": provider_status,
+            "configured_count": configured_count,
         },
     )
 

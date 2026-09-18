@@ -23,6 +23,27 @@
     <h1>Platform overview</h1>
     <p class="muted">Visible only to admin accounts. Not a customer-facing page.</p>
 
+    <div class="panel" style="margin:20px 0; border-color: {{ '#4E8B6C' if configured_count > 1 else '#B5533C' }};">
+      <h3>AI provider status — {{ configured_count }} of 5 configured</h3>
+      {% if configured_count <= 1 %}
+      <p style="color:#B5533C; margin-bottom:12px;"><strong>⚠️ Only {{ configured_count }} provider configured.</strong> If that one hits a rate limit or runs out of quota, chat and the AI page builder will fail with no fallback. Add at least one more below — Gemini and Groq are free.</p>
+      {% else %}
+      <p style="color:#4E8B6C; margin-bottom:12px;">✅ {{ configured_count }} providers configured — if one fails or hits a rate limit, requests automatically fall back to the next one.</p>
+      {% endif %}
+      <table class="admin-table">
+        <tr><th>Provider</th><th>Status</th><th>Env var</th><th>Free tier</th></tr>
+        {% for p in provider_status %}
+        <tr>
+          <td>{{ p.name }}</td>
+          <td>{% if p.configured %}✅ Configured{% else %}❌ Not set{% endif %}</td>
+          <td><code>{{ p.env_var }}</code></td>
+          <td>{{ "Yes" if p.free_tier else "No (paid billing required)" }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      <p class="muted" style="margin-top:10px; font-size:0.85rem;">Set any of these in Render → your service → Environment tab. Fallback order is fixed: Anthropic → OpenAI → Gemini → Groq → Mistral, trying each configured one in turn until one succeeds.</p>
+    </div>
+
     <div class="kpi-row">
       <div class="kpi"><b>{{ total_users }}</b>Total users</div>
       <div class="kpi"><b>₹{{ "{:,.0f}".format(total_revenue) }}</b>Revenue (paid)</div>
