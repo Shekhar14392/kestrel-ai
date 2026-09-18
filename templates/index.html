@@ -48,6 +48,9 @@
   <section class="hero">
     <div class="wrap">
       <div class="eyebrow" id="hero-eyebrow">No-code AI agent platform</div>
+      <div style="display:inline-block; background:var(--brass); color:var(--ink); font-weight:600; font-size:0.8rem; padding:4px 12px; border-radius:999px; margin-bottom:12px;">
+        🎙️ NEW — Multilingual Voice Assistant add-on, now live
+      </div>
       <h1 id="hero-h1">Build, deploy, and run AI agents for every part of your business — without a single line of code.</h1>
       <p class="lead" id="hero-lead">Kestrel AI combines industry-specific agents, a visual workflow builder, live monitoring, and built-in billing so a team of one can run automation like a team of twenty.</p>
       <div class="cta-row">
@@ -83,6 +86,11 @@
         eyebrow: 'Live in under 10 minutes',
         h1: 'Describe your business. Kestrel AI builds the workflow.',
         lead: 'Drag-and-drop automation, industry-tuned agents, and billing that works from day one — start free, no card needed.'
+      },
+      {
+        eyebrow: 'Now with multilingual voice',
+        h1: 'Let customers talk to your AI team — in their own language.',
+        lead: 'Add the Voice Assistant add-on and any of your 16 agents can speak and listen, live, in the language your customer picks.'
       }
     ];
     var v = variants[Math.floor(Math.random() * variants.length)];
@@ -106,6 +114,7 @@
         <div class="cell"><div class="num">04</div><h3>Data analysis</h3><p>Drop in a CSV or Excel file and get instant column stats and previews — no formulas required.</p></div>
         <div class="cell"><div class="num">05</div><h3>Flexible plans</h3><p>Start free, scale by credits, or move to enterprise seats — switch anytime.</p></div>
         <div class="cell"><div class="num">06</div><h3>Built-in billing</h3><p>Razorpay checkout is wired in from day one, billed in INR.</p></div>
+        <div class="cell"><div class="num">07</div><h3>Multilingual voice assistant</h3><p>Add-on: let customers speak to any agent and hear it answer back, in the language they choose.</p></div>
       </div>
     </div>
   </section>
@@ -170,6 +179,24 @@
         {% endfor %}
       </div>
       <p class="muted" style="margin-top:20px; font-size:0.85rem;">New accounts start with a 50-credit trial to explore agents and workflows before choosing a plan. Need more than 60,000 Enterprise credits, invoicing, or seats — <a href="mailto:hello@kestrel.ai" style="text-decoration:underline;">contact us</a> for custom limits.</p>
+
+      {% if addons %}
+      <div class="panel" style="margin-top:32px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div>
+          <div class="kicker">Add-on — works with any plan</div>
+          <h3 style="margin:4px 0;">🎙️ {{ addons.voice_assistant.name }}</h3>
+          <p class="muted">{{ addons.voice_assistant.description }}</p>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:1.4rem; font-weight:700;">₹{{ "{:,.0f}".format(addons.voice_assistant.inr) }}<span class="muted" style="font-size:0.85rem; font-weight:400;">/month</span></div>
+          {% if user %}
+          <a href="/chat" class="btn btn-brass" style="display:inline-block; margin-top:8px;">Add to my account</a>
+          {% else %}
+          <a href="/signup" class="btn btn-brass" style="display:inline-block; margin-top:8px;">Start free to add this</a>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
     </div>
   </section>
 

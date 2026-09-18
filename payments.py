@@ -29,6 +29,16 @@ PLANS = {
     },
 }
 
+# Add-ons: separate recurring subscriptions layered on top of any plan above,
+# rather than a credit tier of their own. Renews monthly, tracked via
+# User.has_voice_addon / voice_addon_expires rather than User.plan/credits.
+ADDONS = {
+    "voice_assistant": {
+        "name": "Voice Assistant Add-on", "usd": 29, "inr": 2415,
+        "description": "Multilingual voice mode for chatting with any agent by speaking instead of typing.",
+    },
+}
+
 # Given to every new signup before they choose a paid plan. Not sold, not shown on
 # the pricing page, and intentionally capped — see models.User default plan/credits.
 TRIAL_CREDITS = 50

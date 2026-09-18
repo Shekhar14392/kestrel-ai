@@ -42,7 +42,7 @@ def get_site_settings(db: Session) -> SiteSettings:
 def landing(request: Request, user: User = Depends(get_current_user_optional), db: Session = Depends(get_db)):
     settings = get_site_settings(db)
     return templates.TemplateResponse(
-        "index.html", {"request": request, "user": user, "plans": pay.PLANS, "agents": AGENTS, "seo": settings}
+        "index.html", {"request": request, "user": user, "plans": pay.PLANS, "agents": AGENTS, "seo": settings, "addons": pay.ADDONS}
     )
 
 
@@ -262,9 +262,15 @@ def metrics(user: User = Depends(get_current_user), db: Session = Depends(get_db
 
 
 # ---------------------------------------------------------------- Chat / Agents
+def voice_addon_active(user: User) -> bool:
+    return bool(user.has_voice_addon and user.voice_addon_expires and user.voice_addon_expires > dt.datetime.utcnow())
+
+
 @app.get("/chat", response_class=HTMLResponse)
 def chat_page(request: Request, user: User = Depends(get_current_user)):
-    return templates.TemplateResponse("chat.html", {"request": request, "user": user, "agents": AGENTS})
+    return templates.TemplateResponse(
+        "chat.html", {"request": request, "user": user, "agents": AGENTS, "voice_active": voice_addon_active(user), "voice_addon": pay.ADDONS["voice_assistant"]}
+    )
 
 
 @app.post("/api/chat/{agent_key}")
@@ -485,7 +491,10 @@ async def analyze_file(file: UploadFile = File(...), user: User = Depends(get_cu
 # ---------------------------------------------------------------- Pricing / Payments
 @app.get("/pricing", response_class=HTMLResponse)
 def pricing_page(request: Request, user: User = Depends(get_current_user_optional)):
-    return templates.TemplateResponse("index.html", {"request": request, "user": user, "plans": pay.PLANS, "agents": AGENTS, "scroll_to_pricing": True})
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "user": user, "plans": pay.PLANS, "agents": AGENTS, "scroll_to_pricing": True, "addons": pay.ADDONS},
+    )
 
 
 @app.post("/api/payments/razorpay/create-order")
@@ -498,7 +507,22 @@ def razorpay_order(payload: dict, user: User = Depends(get_current_user), db: Se
         order = pay.razorpay_create_order(amount, receipt=f"{user.id}-{plan_key}")
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
-    db.add(Payment(user_id=user.id, gateway="razorpay", gateway_ref=order["id"], plan=plan_key, amount=amount, currency="INR"))
+    db.add(Payment(user_id=user.id, gateway="razorpay", gateway_ref=order["id"], plan=plan_key, kind="plan", amount=amount, currency="INR"))
+    db.commit()
+    return {"order": order, "key_id": os.getenv("RAZORPAY_KEY_ID")}
+
+
+@app.post("/api/payments/razorpay/create-addon-order")
+def razorpay_addon_order(payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    addon_key = payload.get("addon")
+    if addon_key not in pay.ADDONS:
+        raise HTTPException(400, "Unknown add-on.")
+    amount = pay.ADDONS[addon_key]["inr"]
+    try:
+        order = pay.razorpay_create_order(amount, receipt=f"{user.id}-addon-{addon_key}")
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc))
+    db.add(Payment(user_id=user.id, gateway="razorpay", gateway_ref=order["id"], plan=addon_key, kind="addon", amount=amount, currency="INR"))
     db.commit()
     return {"order": order, "key_id": os.getenv("RAZORPAY_KEY_ID")}
 
@@ -511,11 +535,20 @@ def razorpay_verify(payload: dict, user: User = Depends(get_current_user), db: S
     if not ok:
         raise HTTPException(400, "Payment verification failed.")
     p = db.query(Payment).filter(Payment.gateway_ref == payload.get("razorpay_order_id")).first()
-    if p:
-        p.status = "paid"
+    if not p:
+        raise HTTPException(404, "Order not found.")
+    p.status = "paid"
+    if p.kind == "addon":
+        if p.plan == "voice_assistant":
+            user.has_voice_addon = True
+            base = user.voice_addon_expires if (user.voice_addon_expires and user.voice_addon_expires > dt.datetime.utcnow()) else dt.datetime.utcnow()
+            user.voice_addon_expires = base + dt.timedelta(days=30)
+    else:
+        if p.plan not in pay.PLANS:
+            raise HTTPException(400, "Payment references an unknown plan.")
         user.plan = p.plan
         user.credits_remaining = pay.PLANS[p.plan]["credits"]
-        db.commit()
+    db.commit()
     return {"ok": True}
 
 

@@ -20,7 +20,30 @@
         {% endfor %}
       </div>
       <div class="chat-main">
-        <div style="padding:20px 40px 0;"><h1 style="font-size:1.3rem;" id="active-agent-name">{{ (agents.values()|list)[0].name }}</h1><span class="muted" id="active-agent-role">{{ (agents.values()|list)[0].role }}</span></div>
+        <div style="padding:20px 40px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div><h1 style="font-size:1.3rem;" id="active-agent-name">{{ (agents.values()|list)[0].name }}</h1><span class="muted" id="active-agent-role">{{ (agents.values()|list)[0].role }}</span></div>
+          {% if voice_active %}
+          <div style="display:flex; align-items:center; gap:8px;">
+            <select id="voice-lang" style="padding:6px 8px; border:1px solid var(--paper-dim);">
+              <option value="en-US">English (US)</option>
+              <option value="en-IN">English (India)</option>
+              <option value="hi-IN">Hindi</option>
+              <option value="te-IN">Telugu</option>
+              <option value="ta-IN">Tamil</option>
+              <option value="kn-IN">Kannada</option>
+              <option value="mr-IN">Marathi</option>
+              <option value="bn-IN">Bengali</option>
+              <option value="es-ES">Spanish</option>
+              <option value="fr-FR">French</option>
+              <option value="de-DE">German</option>
+              <option value="ar-SA">Arabic</option>
+            </select>
+            <button class="btn btn-ghost" id="mic-btn" onclick="togglelistening()" title="Voice input">🎙️</button>
+          </div>
+          {% else %}
+          <button class="btn btn-brass" onclick="buyVoiceAddon()">🎙️ Unlock Voice Assistant — ₹{{ "{:,.0f}".format(voice_addon.inr) }}/mo</button>
+          {% endif %}
+        </div>
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-input-row">
           <input type="text" id="chat-input" placeholder="Type a message…" onkeydown="if(event.key==='Enter') sendMessage()">
@@ -60,11 +83,11 @@ function addBubble(role, content, scroll = true) {
   if (scroll) box.scrollTop = box.scrollHeight;
 }
 
-async function sendMessage() {
+async function sendMessage(spokenText) {
   const input = document.getElementById('chat-input');
-  const text = input.value.trim();
+  const text = spokenText !== undefined ? spokenText : input.value.trim();
   if (!text) return;
-  input.value = '';
+  if (spokenText === undefined) input.value = '';
   histories[currentAgent] = histories[currentAgent] || [];
   histories[currentAgent].push({ role: 'user', content: text });
   addBubble('user', text);
@@ -76,11 +99,84 @@ async function sendMessage() {
     if (!res.ok) { addBubble('assistant', 'Error: ' + (data.detail || 'something went wrong.')); return; }
     histories[currentAgent].push({ role: 'assistant', content: data.reply });
     addBubble('assistant', data.reply);
+    speakReply(data.reply);
   } catch (e) {
     document.getElementById('chat-messages').lastChild.remove();
     addBubble('assistant', 'Network error — please try again.');
   }
 }
+
+{% if voice_active %}
+// ---- Voice mode: speech-to-text input + text-to-speech playback ----
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+
+function togglelistening() {
+  if (!SpeechRecognitionAPI) {
+    alert('Voice input is not supported in this browser. Try Chrome on desktop or Android.');
+    return;
+  }
+  if (listening) {
+    recognition && recognition.stop();
+    return;
+  }
+  recognition = new SpeechRecognitionAPI();
+  recognition.lang = document.getElementById('voice-lang').value;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  const micBtn = document.getElementById('mic-btn');
+  recognition.onstart = () => { listening = true; micBtn.textContent = '🔴'; micBtn.title = 'Listening… click to stop'; };
+  recognition.onend = () => { listening = false; micBtn.textContent = '🎙️'; micBtn.title = 'Voice input'; };
+  recognition.onerror = (e) => {
+    listening = false; micBtn.textContent = '🎙️';
+    if (e.error === 'not-allowed') alert('Microphone access was blocked. Allow it in your browser settings to use voice mode.');
+  };
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    sendMessage(transcript);
+  };
+  recognition.start();
+}
+
+function speakReply(text) {
+  if (!('speechSynthesis' in window)) return;
+  const lang = document.getElementById('voice-lang').value;
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = lang;
+  const voices = speechSynthesis.getVoices();
+  const match = voices.find(v => v.lang === lang) || voices.find(v => v.lang.startsWith(lang.split('-')[0]));
+  if (match) utter.voice = match;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utter);
+}
+{% else %}
+function speakReply(text) {} // voice add-on not active
+
+async function buyVoiceAddon() {
+  try {
+    const res = await fetch('/api/payments/razorpay/create-addon-order', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({addon: 'voice_assistant'})
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.detail || 'Could not start checkout.'); return; }
+    const rzp = new Razorpay({
+      key: data.key_id, amount: data.order.amount, currency: 'INR', name: 'Kestrel AI',
+      description: 'Voice Assistant Add-on', order_id: data.order.id,
+      handler: async function(response) {
+        const v = await fetch('/api/payments/razorpay/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(response) });
+        if (v.ok) { window.location.reload(); }
+      },
+      theme: { color: '#0B2027' }
+    });
+    rzp.open();
+  } catch (e) {
+    alert('Network error — please try again.');
+  }
+}
+{% endif %}
 </script>
+{% if not voice_active %}<script src="https://checkout.razorpay.com/v1/checkout.js"></script>{% endif %}
 </body>
 </html>

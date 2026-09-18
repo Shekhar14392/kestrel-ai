@@ -20,6 +20,8 @@ class User(Base):
     plan_expires = Column(DateTime, nullable=True)
     credits_remaining = Column(Integer, default=50)  # trial credits; see payments.TRIAL_CREDITS
     is_admin = Column(Boolean, default=False)
+    has_voice_addon = Column(Boolean, default=False)
+    voice_addon_expires = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=dt.datetime.utcnow)
 
     workflows = relationship("Workflow", back_populates="owner", cascade="all, delete-orphan")
@@ -74,6 +76,7 @@ class Payment(Base):
     gateway = Column(String)  # razorpay
     gateway_ref = Column(String)
     plan = Column(String)
+    kind = Column(String, default="plan")  # plan / addon
     amount = Column(Float)
     currency = Column(String, default="INR")
     status = Column(String, default="created")  # created / paid / failed
