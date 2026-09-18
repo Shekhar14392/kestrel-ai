@@ -162,10 +162,15 @@ async def call_llm(system_prompt: str, messages: list[dict]) -> str:
         ("ANTHROPIC_API_KEY", _call_anthropic),
         ("OPENAI_API_KEY", _call_openai),
         ("GEMINI_API_KEY", _call_gemini),
+        ("GROQ_API_KEY", _call_groq),
+        ("MISTRAL_API_KEY", _call_mistral),
     ]
     configured = [(env_var, fn) for env_var, fn in providers if os.getenv(env_var)]
     if not configured:
-        raise RuntimeError("No LLM provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY.")
+        raise RuntimeError(
+            "No LLM provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, "
+            "GROQ_API_KEY, or MISTRAL_API_KEY."
+        )
 
     errors = []
     for env_var, fn in configured:
@@ -228,6 +233,58 @@ async def _call_openai(api_key: str, system_prompt: str, messages: list[dict]) -
         raise RuntimeError(f"OpenAI API error ({exc.response.status_code}).")
     except httpx.RequestError:
         raise RuntimeError("Could not reach OpenAI's API. Please try again.")
+
+
+async def _call_groq(api_key: str, system_prompt: str, messages: list[dict]) -> str:
+    # Groq: free tier, OpenAI-compatible endpoint, runs open-weight models on
+    # specialized hardware. Used as a fast, generous-limit fallback tier.
+    gq_messages = [{"role": "system", "content": system_prompt}] + [
+        {"role": m["role"], "content": m["content"]} for m in messages
+    ]
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.3-70b-versatile", "messages": gq_messages, "max_tokens": 1024},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 401:
+            raise RuntimeError("Groq API key was rejected (invalid or revoked).")
+        if exc.response.status_code == 429:
+            raise RuntimeError("Groq rate limit or quota reached. Try again shortly.")
+        raise RuntimeError(f"Groq API error ({exc.response.status_code}).")
+    except httpx.RequestError:
+        raise RuntimeError("Could not reach Groq's API. Please try again.")
+
+
+async def _call_mistral(api_key: str, system_prompt: str, messages: list[dict]) -> str:
+    # Mistral: free tier with a high monthly token allowance, OpenAI-compatible
+    # endpoint. Used as a high-volume fallback tier.
+    ms_messages = [{"role": "system", "content": system_prompt}] + [
+        {"role": m["role"], "content": m["content"]} for m in messages
+    ]
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://api.mistral.ai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": "mistral-small-latest", "messages": ms_messages, "max_tokens": 1024},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 401:
+            raise RuntimeError("Mistral API key was rejected (invalid or revoked).")
+        if exc.response.status_code == 429:
+            raise RuntimeError("Mistral rate limit or quota reached. Try again shortly.")
+        raise RuntimeError(f"Mistral API error ({exc.response.status_code}).")
+    except httpx.RequestError:
+        raise RuntimeError("Could not reach Mistral's API. Please try again.")
 
 
 async def _call_gemini(api_key: str, system_prompt: str, messages: list[dict]) -> str:

@@ -114,6 +114,13 @@ async function sendMessage(spokenText) {
   const text = spokenText !== undefined ? spokenText : input.value.trim();
   if (!text) return;
   if (spokenText === undefined) input.value = '';
+
+  if (text.startsWith('/')) {
+    addBubble('user', text);
+    await handleCommand(text.trim());
+    return;
+  }
+
   histories[currentAgent] = histories[currentAgent] || [];
   histories[currentAgent].push({ role: 'user', content: text });
   addBubble('user', text);
@@ -130,6 +137,69 @@ async function sendMessage(spokenText) {
     document.getElementById('chat-messages').lastChild.remove();
     addBubble('assistant', 'Network error — please try again.');
   }
+}
+
+async function handleCommand(raw) {
+  const [cmd, ...rest] = raw.split(' ');
+  const arg = rest.join(' ').trim().toLowerCase();
+
+  if (cmd === '/help') {
+    addBubble('assistant',
+      'Available commands:\n' +
+      '/plan — show your current plan, credits, and usage\n' +
+      '/agents — list all available agents\n' +
+      '/switch <name> — switch to another agent, e.g. /switch ved\n' +
+      '/voice — check your voice assistant add-on status\n' +
+      '/pages — how many pages you\'ve built with the AI Page Builder\n' +
+      '/clear — clear this conversation'
+    );
+    return;
+  }
+
+  if (cmd === '/agents') {
+    const list = Object.entries(agents).map(([k, a]) => `${a.name} (${a.role}) — /switch ${k}`).join('\n');
+    addBubble('assistant', 'Your 16 agents:\n' + list);
+    return;
+  }
+
+  if (cmd === '/clear') {
+    histories[currentAgent] = [];
+    renderHistory();
+    return;
+  }
+
+  if (cmd === '/switch') {
+    if (!arg) { addBubble('assistant', 'Usage: /switch <agent name or key>, e.g. /switch ved'); return; }
+    const match = Object.entries(agents).find(([k, a]) => k.toLowerCase() === arg || a.name.toLowerCase() === arg);
+    if (!match) { addBubble('assistant', `No agent matches "${arg}". Try /agents to see the list.`); return; }
+    const [key] = match;
+    const el = document.querySelector(`.agent-item[data-agent="${key}"]`);
+    selectAgent(key, el);
+    addBubble('assistant', `Switched to ${agents[key].name} — ${agents[key].role}.`);
+    return;
+  }
+
+  if (cmd === '/plan' || cmd === '/voice' || cmd === '/pages') {
+    addBubble('assistant', 'Checking…');
+    try {
+      const res = await fetch('/api/me');
+      const me = await res.json();
+      document.getElementById('chat-messages').lastChild.remove();
+      if (cmd === '/plan') {
+        addBubble('assistant', `Plan: ${me.plan_name}\nCredits remaining: ${me.credits_remaining}${me.is_admin ? ' (admin — unlimited)' : ''}\nWorkflows: ${me.workflow_count} · Pages built: ${me.pages_built}`);
+      } else if (cmd === '/voice') {
+        addBubble('assistant', me.voice_active ? 'Voice assistant add-on: active ✅' : 'Voice assistant add-on: not active. Look for the "Unlock Voice Assistant" button above to add it.');
+      } else if (cmd === '/pages') {
+        addBubble('assistant', `You've built ${me.pages_built} page(s) with the AI Page Builder. Visit /page-builder to see them or make a new one.`);
+      }
+    } catch (e) {
+      document.getElementById('chat-messages').lastChild.remove();
+      addBubble('assistant', 'Could not fetch your account info right now.');
+    }
+    return;
+  }
+
+  addBubble('assistant', `Unknown command "${cmd}". Type /help to see what's available.`);
 }
 
 {% if voice_active %}

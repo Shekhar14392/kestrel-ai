@@ -275,6 +275,24 @@ def chat_page(request: Request, user: User = Depends(get_current_user)):
     )
 
 
+@app.get("/api/me")
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    pages_built = db.query(GeneratedPage).filter(GeneratedPage.owner_id == user.id).count()
+    workflow_count = db.query(Workflow).filter(Workflow.owner_id == user.id).count()
+    plan_info = pay.PLANS.get(user.plan, {})
+    return {
+        "full_name": user.full_name,
+        "email": user.email,
+        "plan": user.plan,
+        "plan_name": plan_info.get("name", user.plan),
+        "credits_remaining": user.credits_remaining,
+        "is_admin": user.is_admin,
+        "voice_active": voice_addon_active(user),
+        "pages_built": pages_built,
+        "workflow_count": workflow_count,
+    }
+
+
 @app.post("/api/chat/{agent_key}")
 async def chat_send(agent_key: str, payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not user.is_admin and user.credits_remaining <= 0:
