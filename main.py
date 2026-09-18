@@ -263,6 +263,8 @@ def metrics(user: User = Depends(get_current_user), db: Session = Depends(get_db
 
 # ---------------------------------------------------------------- Chat / Agents
 def voice_addon_active(user: User) -> bool:
+    if user.is_admin:
+        return True
     return bool(user.has_voice_addon and user.voice_addon_expires and user.voice_addon_expires > dt.datetime.utcnow())
 
 
@@ -275,7 +277,7 @@ def chat_page(request: Request, user: User = Depends(get_current_user)):
 
 @app.post("/api/chat/{agent_key}")
 async def chat_send(agent_key: str, payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if user.credits_remaining <= 0:
+    if not user.is_admin and user.credits_remaining <= 0:
         raise HTTPException(402, "Out of credits. Please upgrade your plan.")
     agent = AGENTS.get(agent_key, AGENTS["tara"])
     text = payload.get("message", "")
@@ -300,7 +302,8 @@ async def chat_send(agent_key: str, payload: dict, user: User = Depends(get_curr
         raise HTTPException(503, str(exc))
 
     db.add(ChatMessage(user_id=user.id, agent_key=agent_key, role="assistant", content=reply))
-    user.credits_remaining = max(0, user.credits_remaining - 1)
+    if not user.is_admin:
+        user.credits_remaining = max(0, user.credits_remaining - 1)
     db.commit()
     return {"reply": reply, "agent": agent["name"], "credits_remaining": user.credits_remaining}
 
@@ -318,7 +321,7 @@ def page_builder_page(request: Request, user: User = Depends(get_current_user), 
 
 @app.post("/api/pages/generate")
 async def generate_page(payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if user.credits_remaining < 5:
+    if not user.is_admin and user.credits_remaining < 5:
         raise HTTPException(402, "Not enough credits. Page generation costs 5 credits.")
     prompt = payload.get("prompt", "").strip()
     if not prompt:
@@ -339,7 +342,8 @@ async def generate_page(payload: dict, user: User = Depends(get_current_user), d
 
     page = GeneratedPage(owner_id=user.id, slug=slug, prompt=prompt, html_content=html)
     db.add(page)
-    user.credits_remaining -= 5
+    if not user.is_admin:
+        user.credits_remaining -= 5
     db.commit()
     return {"slug": slug, "url": f"/p/{slug}", "credits_remaining": user.credits_remaining}
 

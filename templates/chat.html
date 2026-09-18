@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agent Chat — Kestrel AI</title>
 <link rel="stylesheet" href="/static/css/style.css">
+<style>
+  #active-agent-avatar.speaking .agent-mouth { animation: agent-talk 0.35s ease-in-out infinite alternate; transform-origin: center; }
+  @keyframes agent-talk {
+    from { transform: scaleY(1); }
+    to { transform: scaleY(2.2); }
+  }
+</style>
 </head>
 <body>
 <div class="app-shell">
@@ -21,7 +28,10 @@
       </div>
       <div class="chat-main">
         <div style="padding:20px 40px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <div><h1 style="font-size:1.3rem;" id="active-agent-name">{{ (agents.values()|list)[0].name }}</h1><span class="muted" id="active-agent-role">{{ (agents.values()|list)[0].role }}</span></div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div id="active-agent-avatar" style="width:48px; height:48px; display:none;"></div>
+            <div><h1 style="font-size:1.3rem;" id="active-agent-name">{{ (agents.values()|list)[0].name }}</h1><span class="muted" id="active-agent-role">{{ (agents.values()|list)[0].role }}</span></div>
+          </div>
           {% if voice_active %}
           <div style="display:flex; align-items:center; gap:8px;">
             <select id="voice-lang" style="padding:6px 8px; border:1px solid var(--paper-dim);">
@@ -59,12 +69,28 @@ const agents = {{ agents|tojson }};
 let currentAgent = Object.keys(agents)[0];
 const histories = {};
 
+(function initAvatar() {
+  const avatarBox = document.getElementById('active-agent-avatar');
+  if (agents[currentAgent] && agents[currentAgent].avatar_svg) {
+    avatarBox.innerHTML = agents[currentAgent].avatar_svg;
+    avatarBox.style.display = 'block';
+  }
+})();
+
 function selectAgent(key, el) {
   currentAgent = key;
   document.querySelectorAll('.agent-item').forEach(e => e.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('active-agent-name').textContent = agents[key].name;
   document.getElementById('active-agent-role').textContent = agents[key].role;
+  const avatarBox = document.getElementById('active-agent-avatar');
+  if (agents[key].avatar_svg) {
+    avatarBox.innerHTML = agents[key].avatar_svg;
+    avatarBox.style.display = 'block';
+  } else {
+    avatarBox.innerHTML = '';
+    avatarBox.style.display = 'none';
+  }
   renderHistory();
 }
 
@@ -142,12 +168,16 @@ function togglelistening() {
 
 function speakReply(text) {
   if (!('speechSynthesis' in window)) return;
+  const avatarBox = document.getElementById('active-agent-avatar');
   const lang = document.getElementById('voice-lang').value;
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = lang;
   const voices = speechSynthesis.getVoices();
   const match = voices.find(v => v.lang === lang) || voices.find(v => v.lang.startsWith(lang.split('-')[0]));
   if (match) utter.voice = match;
+  utter.onstart = () => avatarBox.classList.add('speaking');
+  utter.onend = () => avatarBox.classList.remove('speaking');
+  utter.onerror = () => avatarBox.classList.remove('speaking');
   speechSynthesis.cancel();
   speechSynthesis.speak(utter);
 }

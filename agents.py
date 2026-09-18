@@ -120,7 +120,7 @@ AGENTS = {
     <ellipse cx="84" cy="80" rx="5" ry="6" fill="#123039"/>
     <ellipse cx="116" cy="80" rx="5" ry="6" fill="#123039"/>
   </g>
-  <path d="M88 102 Q100 110 112 102" stroke="#8A4B32" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path class="agent-mouth" d="M88 102 Q100 110 112 102" stroke="#8A4B32" stroke-width="3" fill="none" stroke-linecap="round"/>
   <path d="M76 150 Q100 138 124 150" stroke="#C9A227" stroke-width="4" fill="none" stroke-linecap="round"/>
 </svg>""",
     },
@@ -144,7 +144,7 @@ AGENTS = {
     <ellipse cx="86" cy="80" rx="5" ry="6" fill="#1C2B33"/>
     <ellipse cx="114" cy="80" rx="5" ry="6" fill="#1C2B33"/>
   </g>
-  <path d="M90 102 Q100 107 110 102" stroke="#7A4A2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path class="agent-mouth" d="M90 102 Q100 107 110 102" stroke="#7A4A2E" stroke-width="3" fill="none" stroke-linecap="round"/>
   <path d="M76 150 Q100 140 124 150" stroke="#4E8B6C" stroke-width="4" fill="none" stroke-linecap="round"/>
 </svg>""",
     },
@@ -153,22 +153,27 @@ AGENTS = {
 
 async def call_llm(system_prompt: str, messages: list[dict]) -> str:
     """
-    Multi-provider adapter. Tries Anthropic first (ANTHROPIC_API_KEY), falls back to
-    OpenAI (OPENAI_API_KEY), then Gemini (GEMINI_API_KEY). Raises if none configured.
+    Multi-provider adapter with real fallback. Tries every configured provider in order
+    (Anthropic, then OpenAI, then Gemini) and only raises once all configured providers
+    have failed — so one exhausted/rate-limited key doesn't take down chat entirely as
+    long as another provider is configured and working.
     """
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
-    gemini_key = os.getenv("GEMINI_API_KEY")
+    providers = [
+        ("ANTHROPIC_API_KEY", _call_anthropic),
+        ("OPENAI_API_KEY", _call_openai),
+        ("GEMINI_API_KEY", _call_gemini),
+    ]
+    configured = [(env_var, fn) for env_var, fn in providers if os.getenv(env_var)]
+    if not configured:
+        raise RuntimeError("No LLM provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY.")
 
-    if anthropic_key:
-        return await _call_anthropic(anthropic_key, system_prompt, messages)
-    if openai_key:
-        return await _call_openai(openai_key, system_prompt, messages)
-    if gemini_key:
-        return await _call_gemini(gemini_key, system_prompt, messages)
-    raise RuntimeError(
-        "No LLM provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY."
-    )
+    errors = []
+    for env_var, fn in configured:
+        try:
+            return await fn(os.getenv(env_var), system_prompt, messages)
+        except RuntimeError as exc:
+            errors.append(str(exc))
+    raise RuntimeError("All configured providers failed: " + " | ".join(errors))
 
 
 async def _call_anthropic(api_key: str, system_prompt: str, messages: list[dict]) -> str:
