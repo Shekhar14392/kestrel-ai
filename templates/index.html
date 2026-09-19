@@ -40,7 +40,7 @@
         <a href="/dashboard" class="btn btn-primary btn-sm">Go to dashboard</a>
       {% else %}
         <a href="/login">Log in</a>
-        <a href="/signup" class="btn btn-primary btn-sm">Start free</a>
+        <a href="/signup" class="btn btn-primary btn-sm">Sign up</a>
       {% endif %}
     </div>
   </div>
@@ -54,13 +54,13 @@
       <h1 id="hero-h1">Build, deploy, and run AI agents for every part of your business — without a single line of code.</h1>
       <p class="lead" id="hero-lead">Kestrel AI combines industry-specific agents, a visual workflow builder, live monitoring, and built-in billing so a team of one can run automation like a team of twenty.</p>
       <div class="cta-row">
-        <a href="/signup" class="btn btn-brass">Start free — no card needed</a>
+        <a href="/signup" class="btn btn-brass">Sign up — plans from ₹4,059/mo</a>
         <a href="/#platform" class="btn btn-ghost" style="border-color:#C9D3D4;color:#F6F4EE;">See how it works</a>
       </div>
       <div class="hero-stats">
         <div class="stat"><b>16</b><span>AI assistants</span></div>
         <div class="stat"><b>&lt;10 min</b><span>To your first live workflow</span></div>
-        <div class="stat"><b>50</b><span>Free trial credits, no card needed</span></div>
+        <div class="stat"><b>6</b><span>Plans to choose from, starting at ₹4,059/mo</span></div>
       </div>
     </div>
   </section>
@@ -85,7 +85,7 @@
       {
         eyebrow: 'Live in under 10 minutes',
         h1: 'Describe your business. Kestrel AI builds the workflow.',
-        lead: 'Drag-and-drop automation, industry-tuned agents, and billing that works from day one — start free, no card needed.'
+        lead: 'Drag-and-drop automation, industry-tuned agents, and billing that works from day one — pick a plan and you\'re live in minutes.'
       },
       {
         eyebrow: 'Now with multilingual voice',
@@ -112,7 +112,7 @@
         <div class="cell"><div class="num">02</div><h3>16 industry-tuned agents</h3><p>Sales, support, e-commerce, real estate, finance, legal, HR, and more — led by Tara and Ved for customer and operations work.</p></div>
         <div class="cell"><div class="num">03</div><h3>Live dashboard</h3><p>Track every workflow run, success rate, and credit balance as it happens.</p></div>
         <div class="cell"><div class="num">04</div><h3>Data analysis</h3><p>Drop in a CSV or Excel file and get instant column stats and previews — no formulas required.</p></div>
-        <div class="cell"><div class="num">05</div><h3>Flexible plans</h3><p>Start free, scale by credits, or move to enterprise seats — switch anytime.</p></div>
+        <div class="cell"><div class="num">05</div><h3>Flexible plans</h3><p>Choose a plan, scale by credits, or move to enterprise seats — switch anytime.</p></div>
         <div class="cell"><div class="num">06</div><h3>Built-in billing</h3><p>Razorpay checkout is wired in from day one, billed in INR.</p></div>
         <div class="cell"><div class="num">07</div><h3>Multilingual voice assistant</h3><p>Add-on: let customers speak to any agent and hear it answer back, in the language they choose.</p></div>
       </div>
@@ -305,7 +305,7 @@
         </div>
         {% endfor %}
       </div>
-      <p class="muted" style="margin-top:20px; font-size:0.85rem;">New accounts start with a 50-credit trial to explore agents and workflows before choosing a plan. Need more than 60,000 Enterprise credits, invoicing, or seats — <a href="mailto:hello@kestrel.ai" style="text-decoration:underline;">contact us</a> for custom limits.</p>
+      <p class="muted" style="margin-top:20px; font-size:0.85rem;">Choose a plan to get full access — Kestrel AI doesn't offer a free trial. Need more than 60,000 Enterprise credits, invoicing, or seats — <a href="mailto:hello@kestrel.ai" style="text-decoration:underline;">contact us</a> for custom limits.</p>
 
       {% if addons %}
       <div class="panel" style="margin-top:32px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
@@ -319,7 +319,7 @@
           {% if user %}
           <a href="/chat" class="btn btn-brass" style="display:inline-block; margin-top:8px;">Add to my account</a>
           {% else %}
-          <a href="/signup" class="btn btn-brass" style="display:inline-block; margin-top:8px;">Start free to add this</a>
+          <a href="/signup" class="btn btn-brass" style="display:inline-block; margin-top:8px;">Sign up to add this</a>
           {% endif %}
         </div>
       </div>
@@ -339,7 +339,12 @@
         description: plan + ' plan', order_id: data.order.id,
         handler: async function(response) {
           const v = await fetch('/api/payments/razorpay/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(response) });
-          if (v.ok) window.location.href = '/thank-you?plan=' + encodeURIComponent(plan) + '&gateway=razorpay';
+          const vData = await v.json().catch(() => ({}));
+          if (v.ok) {
+            window.location.href = vData.first_payment
+              ? '/welcome'
+              : '/thank-you?plan=' + encodeURIComponent(plan) + '&gateway=razorpay';
+          }
         },
         theme: { color: '#0B2027' }
       });

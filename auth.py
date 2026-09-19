@@ -71,6 +71,12 @@ def get_current_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def require_paid_customer(user: User = Depends(get_current_user)) -> User:
+    if user.is_admin or user.has_paid:
+        return user
+    raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Choose a plan to access this feature.")
+
+
 def is_configured_admin_email(email: str) -> bool:
     admin_email = os.getenv("ADMIN_EMAIL", "")
     return bool(admin_email) and email.strip().lower() == admin_email.strip().lower()

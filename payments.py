@@ -39,10 +39,6 @@ ADDONS = {
     },
 }
 
-# Given to every new signup before they choose a paid plan. Not sold, not shown on
-# the pricing page, and intentionally capped — see models.User default plan/credits.
-TRIAL_CREDITS = 50
-
 # ---------------- Razorpay ----------------
 def get_razorpay_client():
     import razorpay

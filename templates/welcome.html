@@ -22,7 +22,7 @@
   <div class="welcome-wrap">
     <div class="eyebrow">You're in</div>
     <h1>Welcome{% if user.full_name %}, {{ user.full_name.split(' ')[0] }}{% endif %}.</h1>
-    <p class="lead">Your account is ready. Here's the team that's going to run your automation from here.</p>
+    <p class="lead">Your {{ plan_name }} plan is active. Here's the team that's going to run your automation from here.</p>
 
     <div class="welcome-agents">
       {% for key, a in agents.items() %}
@@ -35,7 +35,7 @@
     </div>
 
     <p class="muted" style="margin-bottom: 28px;">
-      You start with a 50-credit trial, no card needed. Chat with either assistant, or drag them into
+      {{ user.credits_remaining }} credits are ready to use. Chat with either assistant, or drag them into
       a workflow to automate a task end to end.
     </p>
 

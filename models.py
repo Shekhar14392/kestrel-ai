@@ -18,7 +18,8 @@ class User(Base):
     company = Column(String, default="")
     plan = Column(String, default="trial")  # trial (unpaid) / starter / growth / enterprise
     plan_expires = Column(DateTime, nullable=True)
-    credits_remaining = Column(Integer, default=50)  # trial credits; see payments.TRIAL_CREDITS
+    credits_remaining = Column(Integer, default=0)  # no free trial credits — see has_paid
+    has_paid = Column(Boolean, default=False)  # gates all product access except admin accounts
     is_admin = Column(Boolean, default=False)
     has_voice_addon = Column(Boolean, default=False)
     voice_addon_expires = Column(DateTime, nullable=True)

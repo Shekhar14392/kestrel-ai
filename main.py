@@ -13,7 +13,7 @@ import pandas as pd
 
 from database import Base, engine, get_db
 from models import User, Workflow, WorkflowRun, ChatMessage, Payment, GeneratedPage, SiteSettings
-from auth import hash_password, verify_password, create_token, get_current_user, get_current_user_optional, get_current_admin, is_configured_admin_email
+from auth import hash_password, verify_password, create_token, get_current_user, get_current_user_optional, get_current_admin, is_configured_admin_email, require_paid_customer
 from agents import AGENTS, call_llm, call_gemini_required, PAGE_BUILDER_SYSTEM_PROMPT
 from workflows import run_workflow
 import payments as pay
@@ -93,7 +93,7 @@ def signup(payload: dict, response: Response, db: Session = Depends(get_db)):
         raise HTTPException(400, "An account with this email already exists.")
     db.refresh(user)
     token = create_token(user.id)
-    response = JSONResponse({"ok": True, "redirect": "/welcome"})
+    response = JSONResponse({"ok": True, "redirect": "/pricing"})
     response.set_cookie("kestrel_token", token, httponly=True, max_age=60 * 60 * 24 * 7, samesite="lax")
     return response
 
@@ -124,7 +124,11 @@ def logout():
 # ---------------------------------------------------------------- Welcome / Thank you
 @app.get("/welcome", response_class=HTMLResponse)
 def welcome(request: Request, user: User = Depends(get_current_user)):
-    return templates.TemplateResponse("welcome.html", {"request": request, "user": user, "agents": AGENTS})
+    lead_agents = {k: v for k, v in AGENTS.items() if v.get("avatar_svg")}
+    plan_info = pay.PLANS.get(user.plan, {})
+    return templates.TemplateResponse(
+        "welcome.html", {"request": request, "user": user, "agents": lead_agents, "plan_name": plan_info.get("name", user.plan)}
+    )
 
 
 @app.get("/thank-you", response_class=HTMLResponse)
@@ -141,7 +145,7 @@ def thank_you(request: Request, user: User = Depends(get_current_user)):
 
 # ---------------------------------------------------------------- Dashboard
 @app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def dashboard(request: Request, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     workflows = db.query(Workflow).filter(Workflow.owner_id == user.id).all()
     return templates.TemplateResponse(
         "dashboard.html", {"request": request, "user": user, "workflows": workflows, "plans": pay.PLANS}
@@ -235,7 +239,7 @@ def update_seo(payload: dict, admin: User = Depends(get_current_admin), db: Sess
 
 
 @app.get("/api/metrics")
-def metrics(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def metrics(user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     wf_ids = [w.id for w in db.query(Workflow).filter(Workflow.owner_id == user.id).all()]
     runs = db.query(WorkflowRun).filter(WorkflowRun.workflow_id.in_(wf_ids)).order_by(WorkflowRun.started_at.desc()).limit(50).all()
     total_runs = len(runs)
@@ -280,7 +284,7 @@ def voice_addon_active(user: User) -> bool:
 
 
 @app.get("/chat", response_class=HTMLResponse)
-def chat_page(request: Request, user: User = Depends(get_current_user)):
+def chat_page(request: Request, user: User = Depends(require_paid_customer)):
     return templates.TemplateResponse(
         "chat.html", {"request": request, "user": user, "agents": AGENTS, "voice_active": voice_addon_active(user), "voice_addon": pay.ADDONS["voice_assistant"]}
     )
@@ -305,7 +309,7 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 
 
 @app.post("/api/chat/{agent_key}")
-async def chat_send(agent_key: str, payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def chat_send(agent_key: str, payload: dict, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     if not user.is_admin and user.credits_remaining <= 0:
         raise HTTPException(402, "Out of credits. Please upgrade your plan.")
     agent = AGENTS.get(agent_key, AGENTS["tara"])
@@ -343,13 +347,13 @@ def make_page_slug() -> str:
 
 
 @app.get("/page-builder", response_class=HTMLResponse)
-def page_builder_page(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def page_builder_page(request: Request, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     pages = db.query(GeneratedPage).filter(GeneratedPage.owner_id == user.id).order_by(GeneratedPage.created_at.desc()).all()
     return templates.TemplateResponse("page_builder.html", {"request": request, "user": user, "pages": pages})
 
 
 @app.post("/api/pages/generate")
-async def generate_page(payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def generate_page(payload: dict, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     if not user.is_admin and user.credits_remaining < 5:
         raise HTTPException(402, "Not enough credits. Page generation costs 5 credits.")
     prompt = payload.get("prompt", "").strip()
@@ -386,7 +390,7 @@ def view_generated_page(slug: str, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/pages/{page_id}")
-def delete_page(page_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_page(page_id: str, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     page = db.query(GeneratedPage).filter(GeneratedPage.id == page_id, GeneratedPage.owner_id == user.id).first()
     if not page:
         raise HTTPException(404, "Page not found.")
@@ -397,7 +401,7 @@ def delete_page(page_id: str, user: User = Depends(get_current_user), db: Sessio
 
 # ---------------------------------------------------------------- Dashboard AI Q&A (Gemini)
 @app.post("/api/dashboard/ask")
-async def dashboard_ask(payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def dashboard_ask(payload: dict, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     question = payload.get("question", "").strip()
     if not question:
         raise HTTPException(400, "Ask a question first.")
@@ -431,13 +435,13 @@ async def dashboard_ask(payload: dict, user: User = Depends(get_current_user), d
 
 # ---------------------------------------------------------------- Workflow Builder
 @app.get("/workflows", response_class=HTMLResponse)
-def workflow_list(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def workflow_list(request: Request, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     workflows = db.query(Workflow).filter(Workflow.owner_id == user.id).all()
     return templates.TemplateResponse("workflow_builder.html", {"request": request, "user": user, "workflows": workflows, "agents": AGENTS, "workflow": None})
 
 
 @app.get("/workflows/{workflow_id}", response_class=HTMLResponse)
-def workflow_edit(workflow_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def workflow_edit(workflow_id: str, request: Request, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     workflow = db.query(Workflow).filter(Workflow.id == workflow_id, Workflow.owner_id == user.id).first()
     if not workflow:
         raise HTTPException(404, "Workflow not found.")
@@ -446,7 +450,7 @@ def workflow_edit(workflow_id: str, request: Request, user: User = Depends(get_c
 
 
 @app.post("/api/workflows")
-def create_workflow(payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_workflow(payload: dict, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     wf = Workflow(owner_id=user.id, name=payload.get("name", "Untitled Workflow"), graph_json=json.dumps(payload.get("graph", {})))
     db.add(wf)
     db.commit()
@@ -455,7 +459,7 @@ def create_workflow(payload: dict, user: User = Depends(get_current_user), db: S
 
 
 @app.put("/api/workflows/{workflow_id}")
-def update_workflow(workflow_id: str, payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_workflow(workflow_id: str, payload: dict, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     wf = db.query(Workflow).filter(Workflow.id == workflow_id, Workflow.owner_id == user.id).first()
     if not wf:
         raise HTTPException(404, "Workflow not found.")
@@ -468,7 +472,7 @@ def update_workflow(workflow_id: str, payload: dict, user: User = Depends(get_cu
 
 
 @app.delete("/api/workflows/{workflow_id}")
-def delete_workflow(workflow_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_workflow(workflow_id: str, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     wf = db.query(Workflow).filter(Workflow.id == workflow_id, Workflow.owner_id == user.id).first()
     if not wf:
         raise HTTPException(404, "Workflow not found.")
@@ -478,7 +482,7 @@ def delete_workflow(workflow_id: str, user: User = Depends(get_current_user), db
 
 
 @app.post("/api/workflows/{workflow_id}/run")
-async def trigger_workflow(workflow_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def trigger_workflow(workflow_id: str, user: User = Depends(require_paid_customer), db: Session = Depends(get_db)):
     wf = db.query(Workflow).filter(Workflow.id == workflow_id, Workflow.owner_id == user.id).first()
     if not wf:
         raise HTTPException(404, "Workflow not found.")
@@ -488,12 +492,12 @@ async def trigger_workflow(workflow_id: str, user: User = Depends(get_current_us
 
 # ---------------------------------------------------------------- Data Analysis (CSV / XLS)
 @app.get("/data-analysis", response_class=HTMLResponse)
-def data_analysis_page(request: Request, user: User = Depends(get_current_user)):
+def data_analysis_page(request: Request, user: User = Depends(require_paid_customer)):
     return templates.TemplateResponse("data_analysis.html", {"request": request, "user": user})
 
 
 @app.post("/api/data-analysis")
-async def analyze_file(file: UploadFile = File(...), user: User = Depends(get_current_user)):
+async def analyze_file(file: UploadFile = File(...), user: User = Depends(require_paid_customer)):
     content = await file.read()
     name = file.filename.lower()
     try:
@@ -571,6 +575,7 @@ def razorpay_verify(payload: dict, user: User = Depends(get_current_user), db: S
     if not p:
         raise HTTPException(404, "Order not found.")
     p.status = "paid"
+    first_payment = False
     if p.kind == "addon":
         if p.plan == "voice_assistant":
             user.has_voice_addon = True
@@ -579,10 +584,12 @@ def razorpay_verify(payload: dict, user: User = Depends(get_current_user), db: S
     else:
         if p.plan not in pay.PLANS:
             raise HTTPException(400, "Payment references an unknown plan.")
+        first_payment = not user.has_paid
         user.plan = p.plan
         user.credits_remaining = pay.PLANS[p.plan]["credits"]
+        user.has_paid = True
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "first_payment": first_payment}
 
 
 if __name__ == "__main__":

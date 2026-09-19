@@ -11,6 +11,11 @@
     from { transform: scaleY(1); }
     to { transform: scaleY(2.2); }
   }
+  #active-agent-avatar { border-radius: 50%; transition: box-shadow 0.3s ease; }
+  #active-agent-avatar.emotion-positive { box-shadow: 0 0 0 4px rgba(78, 139, 108, 0.35); }
+  #active-agent-avatar.emotion-apologetic { box-shadow: 0 0 0 4px rgba(181, 83, 60, 0.3); }
+  #active-agent-avatar.emotion-neutral { box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.25); }
+  #voice-interim { min-height: 1.2em; }
 </style>
 </head>
 <body>
@@ -54,6 +59,9 @@
           <button class="btn btn-brass" onclick="buyVoiceAddon()">🎙️ Unlock Voice Assistant — ₹{{ "{:,.0f}".format(voice_addon.inr) }}/mo</button>
           {% endif %}
         </div>
+        {% if voice_active %}
+        <div id="voice-interim" style="display:none; padding:6px 40px 0; color:var(--slate-soft); font-style:italic; font-size:0.9rem;"></div>
+        {% endif %}
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-input-row">
           <input type="text" id="chat-input" placeholder="Type a message…" onkeydown="if(event.key==='Enter') sendMessage()">
@@ -203,40 +211,114 @@ async function handleCommand(raw) {
 }
 
 {% if voice_active %}
-// ---- Voice mode: speech-to-text input + text-to-speech playback ----
+// ---- Voice mode: continuous speech-to-text + text-to-speech + emotion-reactive avatar ----
 const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
-let listening = false;
+let continuousMode = false;
+let assistantSpeaking = false;
+
+// Neutral mouth path is whatever shipped in the avatar SVG; store it once so we can restore it.
+let neutralMouthPath = null;
 
 function togglelistening() {
   if (!SpeechRecognitionAPI) {
     alert('Voice input is not supported in this browser. Try Chrome on desktop or Android.');
     return;
   }
-  if (listening) {
+  const micBtn = document.getElementById('mic-btn');
+  const interimBox = document.getElementById('voice-interim');
+
+  if (continuousMode) {
+    continuousMode = false;
     recognition && recognition.stop();
+    micBtn.textContent = '🎙️'; micBtn.title = 'Start continuous voice mode';
+    if (interimBox) interimBox.style.display = 'none';
     return;
   }
+
+  continuousMode = true;
+  micBtn.textContent = '🔴'; micBtn.title = 'Listening continuously… click to stop';
+  if (interimBox) interimBox.style.display = 'block';
+  startRecognitionCycle();
+}
+
+function startRecognitionCycle() {
+  if (!continuousMode || assistantSpeaking) return;
   recognition = new SpeechRecognitionAPI();
   recognition.lang = document.getElementById('voice-lang').value;
-  recognition.interimResults = false;
+  recognition.continuous = true;
+  recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
-  const micBtn = document.getElementById('mic-btn');
-  recognition.onstart = () => { listening = true; micBtn.textContent = '🔴'; micBtn.title = 'Listening… click to stop'; };
-  recognition.onend = () => { listening = false; micBtn.textContent = '🎙️'; micBtn.title = 'Voice input'; };
-  recognition.onerror = (e) => {
-    listening = false; micBtn.textContent = '🎙️';
-    if (e.error === 'not-allowed') alert('Microphone access was blocked. Allow it in your browser settings to use voice mode.');
-  };
   recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    sendMessage(transcript);
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        const interimBox = document.getElementById('voice-interim');
+        if (interimBox) interimBox.textContent = '';
+        sendMessage(transcript);
+      } else {
+        interim += transcript;
+      }
+    }
+    const interimBox = document.getElementById('voice-interim');
+    if (interimBox && interim) interimBox.textContent = '🎙️ ' + interim;
   };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'not-allowed') {
+      continuousMode = false;
+      document.getElementById('mic-btn').textContent = '🎙️';
+      alert('Microphone access was blocked. Allow it in your browser settings to use voice mode.');
+    }
+    // 'no-speech' and similar are routine in continuous mode — onend will restart the cycle.
+  };
+
+  recognition.onend = () => {
+    // Browsers auto-stop SpeechRecognition after a pause even with continuous:true.
+    // Restart automatically unless the user turned voice mode off or the assistant is speaking.
+    if (continuousMode && !assistantSpeaking) {
+      setTimeout(startRecognitionCycle, 250);
+    }
+  };
+
   recognition.start();
 }
 
+// ---- Lightweight emotion heuristic (not a real classifier — keyword-based, for a visual cue only) ----
+function detectEmotion(text) {
+  const lower = text.toLowerCase();
+  if (/\b(sorry|apologize|unfortunately|can't|cannot|unable|issue|problem)\b/.test(lower)) return 'apologetic';
+  if (/\b(great|excellent|happy to|glad|awesome|perfect|congrat)\b/.test(lower) || text.includes('!')) return 'positive';
+  return 'neutral';
+}
+
+const MOUTH_PATHS = {
+  neutral: null, // filled in from the SVG's shipped default on first use
+  positive: 'M84 100 Q100 116 116 100',
+  apologetic: 'M86 106 Q100 100 114 106',
+};
+
+function applyEmotion(emotion) {
+  const mouth = document.querySelector('#active-agent-avatar .agent-mouth');
+  const avatarBox = document.getElementById('active-agent-avatar');
+  if (!mouth || !avatarBox) return;
+  if (neutralMouthPath === null) neutralMouthPath = mouth.getAttribute('d');
+  mouth.setAttribute('d', MOUTH_PATHS[emotion] || neutralMouthPath);
+  avatarBox.classList.remove('emotion-positive', 'emotion-apologetic', 'emotion-neutral');
+  avatarBox.classList.add('emotion-' + emotion);
+}
+
+function resetEmotion() {
+  const mouth = document.querySelector('#active-agent-avatar .agent-mouth');
+  const avatarBox = document.getElementById('active-agent-avatar');
+  if (mouth && neutralMouthPath !== null) mouth.setAttribute('d', neutralMouthPath);
+  if (avatarBox) avatarBox.classList.remove('emotion-positive', 'emotion-apologetic', 'emotion-neutral');
+}
+
 function speakReply(text) {
+  applyEmotion(detectEmotion(text));
   if (!('speechSynthesis' in window)) return;
   const avatarBox = document.getElementById('active-agent-avatar');
   const lang = document.getElementById('voice-lang').value;
@@ -245,9 +327,23 @@ function speakReply(text) {
   const voices = speechSynthesis.getVoices();
   const match = voices.find(v => v.lang === lang) || voices.find(v => v.lang.startsWith(lang.split('-')[0]));
   if (match) utter.voice = match;
+
+  assistantSpeaking = true;
+  recognition && recognition.stop(); // avoid the mic picking up the assistant's own voice
+
   utter.onstart = () => avatarBox.classList.add('speaking');
-  utter.onend = () => avatarBox.classList.remove('speaking');
-  utter.onerror = () => avatarBox.classList.remove('speaking');
+  utter.onend = () => {
+    avatarBox.classList.remove('speaking');
+    resetEmotion();
+    assistantSpeaking = false;
+    if (continuousMode) startRecognitionCycle();
+  };
+  utter.onerror = () => {
+    avatarBox.classList.remove('speaking');
+    resetEmotion();
+    assistantSpeaking = false;
+    if (continuousMode) startRecognitionCycle();
+  };
   speechSynthesis.cancel();
   speechSynthesis.speak(utter);
 }
